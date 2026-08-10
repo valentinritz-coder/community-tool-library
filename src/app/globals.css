@@ -54,6 +54,26 @@ a {
   position: relative;
 }
 
+.skip-link {
+  background: var(--surface);
+  border: 0.2rem solid var(--ink);
+  border-radius: 0.5rem;
+  color: var(--ink);
+  font-weight: 700;
+  left: 1.25rem;
+  padding: 0.75rem 1rem;
+  position: absolute;
+  top: 0;
+  transform: translateY(-150%);
+  z-index: 1;
+}
+
+.skip-link:focus {
+  outline: 0.2rem solid var(--highlight);
+  outline-offset: 0.2rem;
+  transform: translateY(0);
+}
+
 .brand {
   align-items: center;
   display: inline-flex;
@@ -139,6 +159,10 @@ h1 {
 @media (min-width: 48rem) {
   .page {
     padding: 2rem 3rem;
+  }
+
+  .skip-link {
+    left: 3rem;
   }
 }
 

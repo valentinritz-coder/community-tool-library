@@ -1,17 +1,17 @@
 export function LandingPage() {
   return (
     <div className="page">
+      <a className="skip-link" href="#main">
+        Skip to main content
+      </a>
+
       <header className="header">
-        <a
-          className="brand"
-          href="#main"
-          aria-label="Community Tool Library, skip to main content"
-        >
+        <span className="brand">
           <span className="brand-mark" aria-hidden="true">
             CT
           </span>
           Community Tool Library
-        </a>
+        </span>
       </header>
 
       <main className="hero" id="main">

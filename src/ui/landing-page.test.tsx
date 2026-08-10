@@ -21,8 +21,11 @@ describe("LandingPage", () => {
   it("provides a keyboard-accessible skip link", () => {
     render(<LandingPage />);
 
-    expect(
-      screen.getByRole("link", { name: /skip to main content/i }),
-    ).toHaveAttribute("href", "#main");
+    const skipLink = screen.getByRole("link", {
+      name: "Skip to main content",
+    });
+
+    expect(skipLink).toHaveAttribute("href", "#main");
+    expect(screen.getByRole("main")).toHaveAttribute("id", "main");
   });
 });
