@@ -24,6 +24,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Start local Supabase
+        run: npm run supabase:start
+
+      - name: Reapply Supabase migrations
+        run: npm run supabase:reset
+
+      - name: Test Supabase authorization
+        run: npm run supabase:test
+
       - name: Lint
         run: npm run lint
 
@@ -35,3 +44,7 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Stop local Supabase
+        if: always()
+        run: npm run supabase:stop

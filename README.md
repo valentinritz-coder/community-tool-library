@@ -67,7 +67,10 @@ npm install
 npm run dev
 ```
 
-No environment variables are required for the current application skeleton. Copy `.env.example` when future documented configuration is needed; never commit secrets.
+The application skeleton does not consume backend configuration yet. The repository now includes
+a local Supabase proof of concept; see
+[`docs/development/SUPABASE.md`](docs/development/SUPABASE.md) for its prerequisites, environment
+variables, migration workflow and security tests. Never commit secrets.
 
 The source tree separates concerns as follows:
 

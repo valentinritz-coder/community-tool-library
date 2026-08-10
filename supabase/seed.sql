@@ -1,0 +1,2 @@
+-- No seed data is required for the infrastructure validation.
+-- Security tests create synthetic data inside transactions and roll it back.
