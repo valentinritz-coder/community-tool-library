@@ -58,6 +58,36 @@ Development is issue-driven:
 
 AI coding agents must follow [`AGENTS.md`](AGENTS.md).
 
+## Local development
+
+This project requires Node.js 20.9 or later. Install dependencies and start the development server:
+
+```bash
+npm install
+npm run dev
+```
+
+No environment variables are required for the current application skeleton. Copy `.env.example` when future documented configuration is needed; never commit secrets.
+
+The source tree separates concerns as follows:
+
+- `src/app`: Next.js routes and global styling;
+- `src/ui`: presentation components;
+- `src/domain`: framework-independent domain rules and types;
+- `src/application`: application use cases;
+- `src/infrastructure`: external-system adapters.
+
+Run the complete local validation suite before opening a pull request:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+Formatting can be checked with `npm run format:check` and applied with `npm run format`.
+
 ## Accessibility
 
 The application is intended to be usable by people with limited digital confidence, including older residents. Accessibility is therefore a product requirement, not post-launch polish.
