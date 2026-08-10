@@ -1,0 +1,7 @@
+.next
+coverage
+node_modules
+package-lock.json
+
+# Existing product/legal documentation is outside the application scaffold.
+docs/legal/PRIVACY-DESIGN.md
