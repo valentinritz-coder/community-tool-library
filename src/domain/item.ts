@@ -21,6 +21,27 @@ export interface Item {
   photo_uploaded: boolean;
 }
 
+export function itemCategoryLabel(category: ItemCategory): string {
+  return (
+    itemCategories.find((candidate) => candidate.value === category)?.label ??
+    category
+  );
+}
+
+export function inventoryItems(items: Item[], search: string): Item[] {
+  const query = search.trim().toLocaleLowerCase();
+
+  return items.filter((item) => {
+    if (item.archived || !item.photo_uploaded) return false;
+    if (!query) return true;
+
+    return (
+      item.name.toLocaleLowerCase().includes(query) ||
+      itemCategoryLabel(item.category).toLocaleLowerCase().includes(query)
+    );
+  });
+}
+
 export function priceToCents(price: string): number | null {
   const normalized = price.trim();
   if (!/^\d{1,4}([.,]\d{1,2})?$/.test(normalized)) return null;

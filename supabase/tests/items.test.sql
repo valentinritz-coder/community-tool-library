@@ -1,6 +1,6 @@
 begin;
 
-select plan(43);
+select plan(47);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password
@@ -288,6 +288,29 @@ select lives_ok(
     '{"mimetype":"image/jpeg","updated":true}', (select photo_path from item_test_context)
   ),
   'the owner can replace their photo'
+);
+
+select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000002', true);
+select is(
+  (select count(*) from public.items where id = (select item_id from item_test_context)),
+  0::bigint,
+  'a same-community member cannot browse a known archived item id'
+);
+select is(
+  (select count(*) from public.items where community_id = (select community_id from item_test_context)),
+  0::bigint,
+  'an archived item is excluded even when its community id is supplied'
+);
+select is(
+  (select count(*) from storage.objects where name = (select photo_path from item_test_context)),
+  0::bigint,
+  'the archived item photo is no longer readable by a peer'
+);
+select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000001', true);
+select is(
+  (select count(*) from public.items where id = (select item_id from item_test_context)),
+  1::bigint,
+  'the owner can still manage their archived item'
 );
 select is(
   (select count(*) from storage.objects where bucket_id = 'item-photos'),
