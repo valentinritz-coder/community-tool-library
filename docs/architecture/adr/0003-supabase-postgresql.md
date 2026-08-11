@@ -1,6 +1,6 @@
 # ADR 0003: Use Supabase/PostgreSQL for the MVP
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-10
 
 ## Context
@@ -11,7 +11,9 @@ The MVP needs relational data, authentication, photo storage and strong authoriz
 
 Use Supabase as the initial backend platform, with PostgreSQL as the source of truth, Supabase Auth for authentication, and Supabase Storage for item/condition photos.
 
-This remains **Proposed** until M0 verifies local development, migration workflow, authorization policies and cost/operational fit.
+M0 validated the decision with a reproducible CLI workflow, versioned migrations and behavioural
+pgTAP tests for both table RLS and private Storage object policies. The proof uses an authenticated
+user's JWT identity rather than a privileged service-role bypass.
 
 ## Consequences
 
@@ -43,3 +45,16 @@ This remains **Proposed** until M0 verifies local development, migration workflo
 - test strategy for RLS;
 - private/public storage policy design;
 - environment/secret management.
+
+## M0 validation result
+
+The local stack can be created from a clean clone with the pinned Supabase CLI and Docker. Database
+reset applies repository migrations deterministically, and `supabase test db` exercises allowed and
+denied access as the `authenticated` database role. A private, MIME-restricted `item-photos` bucket
+uses the first object-path segment as the authenticated owner's identifier; behavioural tests prove
+that an owner can upload/read their path while another identity cannot read it or upload to it.
+
+This is sufficient to accept Supabase/PostgreSQL as the MVP backend direction. It does not approve a
+future domain schema or final community-aware authorization rules: those must be introduced and
+tested with their respective features. Operational cost remains deployment-specific and must be
+reviewed before a pilot environment is provisioned.
