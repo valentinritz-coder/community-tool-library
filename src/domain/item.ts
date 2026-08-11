@@ -31,6 +31,7 @@ export interface InventoryItem {
   is_free: boolean;
   price_per_day_cents: number | null;
   is_owned: boolean;
+  availability_summary: string;
 }
 
 export function itemCategoryLabel(category: ItemCategory): string {
