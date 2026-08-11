@@ -3,7 +3,11 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 
-import type { Community, Membership } from "../domain/community";
+import {
+  canApproveMembership,
+  type Community,
+  type Membership,
+} from "../domain/community";
 import { getSupabaseBrowserClient } from "../infrastructure/supabase-browser";
 
 interface CommunityState {
@@ -21,6 +25,7 @@ function errorMessage(error: unknown): string {
 
 export function CommunityPage() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState("");
   const [state, setState] = useState<CommunityState>(emptyState);
   const [message, setMessage] = useState("");
 
@@ -45,6 +50,7 @@ export function CommunityPage() {
         const { data } = await supabase.auth.getSession();
         const signedIn = Boolean(data.session);
         setAuthenticated(signedIn);
+        setCurrentUserId(data.session?.user.id ?? "");
         if (signedIn) await refresh();
       } catch (error) {
         setMessage(errorMessage(error));
@@ -55,6 +61,7 @@ export function CommunityPage() {
     const supabase = getSupabaseBrowserClient();
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthenticated(Boolean(session));
+      setCurrentUserId(session?.user.id ?? "");
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -73,6 +80,8 @@ export function CommunityPage() {
         });
       if (error) throw error;
       setAuthenticated(true);
+      const { data } = await getSupabaseBrowserClient().auth.getUser();
+      setCurrentUserId(data.user?.id ?? "");
       await refresh();
       setMessage("Signed in successfully.");
     } catch (error) {
@@ -253,7 +262,11 @@ export function CommunityPage() {
                       <span>
                         {membership.role} — {membership.status}
                       </span>
-                      {membership.status === "pending" && (
+                      {canApproveMembership(
+                        membership,
+                        currentUserId,
+                        state.memberships,
+                      ) && (
                         <button
                           type="button"
                           onClick={() =>
@@ -283,6 +296,7 @@ export function CommunityPage() {
                   .auth.signOut()
                   .then(() => {
                     setAuthenticated(false);
+                    setCurrentUserId("");
                     setState(emptyState);
                   })
               }

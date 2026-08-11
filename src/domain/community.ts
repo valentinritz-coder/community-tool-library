@@ -13,3 +13,21 @@ export interface Membership {
   role: MembershipRole;
   status: MembershipStatus;
 }
+
+export function canApproveMembership(
+  membership: Membership,
+  currentUserId: string,
+  memberships: Membership[],
+): boolean {
+  if (membership.status !== "pending" || membership.user_id === currentUserId) {
+    return false;
+  }
+
+  return memberships.some(
+    (candidate) =>
+      candidate.community_id === membership.community_id &&
+      candidate.user_id === currentUserId &&
+      candidate.role === "admin" &&
+      candidate.status === "active",
+  );
+}
