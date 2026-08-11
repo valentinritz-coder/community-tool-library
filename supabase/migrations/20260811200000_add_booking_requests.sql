@@ -88,10 +88,10 @@ begin
 
   if not coalesce(
     (
-      select range_agg(daterange(start_date, end_date, '[]'))
+      select range_agg(daterange(availability.start_date, availability.end_date, '[]'))
         @> daterange(requested_start_date, requested_end_date, '[]')
-      from public.availabilities
-      where availabilities.item_id = target_item_id
+      from public.availabilities as availability
+      where availability.item_id = target_item_id
     ),
     false
   ) then
