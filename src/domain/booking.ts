@@ -4,7 +4,7 @@ export interface BookingRequest {
   item_name: string;
   start_date: string;
   end_date: string;
-  status: "requested";
+  status: "requested" | "accepted" | "refused";
   is_borrower: boolean;
   is_item_owner: boolean;
   borrower_label: "You" | "Community member";
