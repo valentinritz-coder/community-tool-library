@@ -515,12 +515,14 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         aria-labelledby="owner-bookings-title"
       >
         <h3 id="owner-bookings-title">Reservation decisions</h3>
-        {bookings.filter((booking) => booking.can_decide).length === 0 ? (
+        {bookings.filter(
+          (booking) => booking.is_item_owner || booking.can_decide,
+        ).length === 0 ? (
           <p>No reservation requests for you to decide.</p>
         ) : (
           <ul>
             {bookings
-              .filter((booking) => booking.can_decide)
+              .filter((booking) => booking.is_item_owner || booking.can_decide)
               .map((booking) => (
                 <li key={`owner-${booking.id}`}>
                   <strong>{booking.item_name}</strong>

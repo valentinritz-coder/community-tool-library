@@ -27,7 +27,7 @@ begin
   select bookings.id, bookings.item_id, items.name, bookings.start_date,
     bookings.end_date, bookings.status,
     bookings.borrower_id = auth.uid(), items.owner_id = auth.uid(),
-    (
+    bookings.status = 'requested' and (
       (items.owner_id = auth.uid() and public.is_active_community_member(items.community_id))
       or public.is_active_community_admin(items.community_id)
     ),
@@ -38,7 +38,10 @@ begin
     and (
       bookings.borrower_id = auth.uid()
       or items.owner_id = auth.uid()
-      or public.is_active_community_admin(items.community_id)
+      or (
+        bookings.status = 'requested'
+        and public.is_active_community_admin(items.community_id)
+      )
     )
   order by bookings.created_at desc;
 end;

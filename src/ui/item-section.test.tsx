@@ -438,6 +438,46 @@ describe("ItemSection", () => {
     expect(screen.queryByRole("button", { name: /accept|refuse/i })).toBeNull();
   });
 
+  it("keeps terminal bookings for the item owner without decision actions", async () => {
+    rpc.mockImplementation((name: string) => {
+      if (name === "list_booking_requests") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-08-15",
+              end_date: "2026-08-16",
+              status: "accepted",
+              is_borrower: false,
+              is_item_owner: true,
+              can_decide: false,
+              borrower_label: "Community member",
+            },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="owner-a"
+      />,
+    );
+
+    expect(await screen.findByText("Status: Accepted")).toBeInTheDocument();
+    expect(
+      screen.getByText("Requested by: Community member"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept|refuse/i })).toBeNull();
+  });
+
   it("uses the decision RPC and refreshes authoritative status", async () => {
     let decided = false;
     rpc.mockImplementation((name: string, parameters?: unknown) => {
