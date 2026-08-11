@@ -205,10 +205,15 @@ select is_empty(
     where name = (select photo_path from item_test_context) returning 1$$,
   'a same-community non-owner cannot replace the photo'
 );
-select is_empty(
-  $$delete from storage.objects
-    where name = (select photo_path from item_test_context) returning 1$$,
-  'a non-owner cannot delete the photo'
+select is(
+  (
+    select count(*) from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and cmd = 'DELETE'
+  ),
+  0::bigint,
+  'item photos expose no Storage DELETE policy'
 );
 select is_empty(
   $$update public.items set description = 'Not mine' returning 1$$,
@@ -284,10 +289,10 @@ select lives_ok(
   ),
   'the owner can replace their photo'
 );
-select is_empty(
-  $$delete from storage.objects
-    where name = (select photo_path from item_test_context) returning 1$$,
-  'the owner cannot delete a published item photo'
+select is(
+  (select count(*) from storage.objects where bucket_id = 'item-photos'),
+  1::bigint,
+  'the published photo remains stored because deletion is not exposed'
 );
 
 select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000003', true);
