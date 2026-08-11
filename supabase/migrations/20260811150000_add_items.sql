@@ -173,8 +173,8 @@ using (
   bucket_id = 'item-photos'
   and exists (
     select 1 from public.items
-    where items.id::text = (storage.foldername(name))[1]
-      and items.photo_path = name
+    where items.id::text = (storage.foldername(storage.objects.name))[1]
+      and items.photo_path = storage.objects.name
       and items.photo_uploaded
       and public.is_active_community_member(items.community_id)
   )
@@ -186,8 +186,8 @@ with check (
   bucket_id = 'item-photos'
   and exists (
     select 1 from public.items
-    where items.id::text = (storage.foldername(name))[1]
-      and items.photo_path = name
+    where items.id::text = (storage.foldername(storage.objects.name))[1]
+      and items.photo_path = storage.objects.name
       and items.owner_id = auth.uid()
       and public.is_active_community_member(items.community_id)
   )
@@ -199,7 +199,7 @@ using (
   bucket_id = 'item-photos'
   and exists (
     select 1 from public.items
-    where items.photo_path = name
+    where items.photo_path = storage.objects.name
       and items.owner_id = auth.uid()
       and public.is_active_community_member(items.community_id)
   )
@@ -208,7 +208,7 @@ with check (
   bucket_id = 'item-photos'
   and exists (
     select 1 from public.items
-    where items.photo_path = name
+    where items.photo_path = storage.objects.name
       and items.owner_id = auth.uid()
       and public.is_active_community_member(items.community_id)
   )

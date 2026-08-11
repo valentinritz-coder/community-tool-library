@@ -200,43 +200,28 @@ select is((select photo_uploaded from public.items), true, 'publishing records t
 select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000002', true);
 select is((select count(*) from public.items), 1::bigint, 'an active same-community member can read the published item');
 select is((select count(*) from storage.objects where bucket_id = 'item-photos'), 1::bigint, 'an active same-community member can read the photo');
-select is(
-  (with changed as (
-    update storage.objects set metadata = '{"mimetype":"image/png"}'
-    where name = (select photo_path from item_test_context) returning 1
-  ) select count(*) from changed),
-  0::bigint,
+select is_empty(
+  $$update storage.objects set metadata = '{"mimetype":"image/png"}'
+    where name = (select photo_path from item_test_context) returning 1$$,
   'a same-community non-owner cannot replace the photo'
 );
-select is(
-  (with deleted as (
-    delete from storage.objects
-    where name = (select photo_path from item_test_context) returning 1
-  ) select count(*) from deleted),
-  0::bigint,
+select is_empty(
+  $$delete from storage.objects
+    where name = (select photo_path from item_test_context) returning 1$$,
   'a non-owner cannot delete the photo'
 );
-select is(
-  (with changed as (
-    update public.items set description = 'Not mine' returning 1
-  ) select count(*) from changed),
-  0::bigint,
+select is_empty(
+  $$update public.items set description = 'Not mine' returning 1$$,
   'a non-owner cannot modify the item'
 );
-select is(
-  (with changed as (
-    update public.items set archived = true returning 1
-  ) select count(*) from changed),
-  0::bigint,
+select is_empty(
+  $$update public.items set archived = true returning 1$$,
   'a non-owner cannot archive the item'
 );
 
 select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000005', true);
-select is(
-  (with changed as (
-    update public.items set description = 'Cross community' returning 1
-  ) select count(*) from changed),
-  0::bigint,
+select is_empty(
+  $$update public.items set description = 'Cross community' returning 1$$,
   'a member of another community cannot modify the item'
 );
 
@@ -299,12 +284,9 @@ select lives_ok(
   ),
   'the owner can replace their photo'
 );
-select is(
-  (with deleted as (
-    delete from storage.objects
-    where name = (select photo_path from item_test_context) returning 1
-  ) select count(*) from deleted),
-  0::bigint,
+select is_empty(
+  $$delete from storage.objects
+    where name = (select photo_path from item_test_context) returning 1$$,
   'the owner cannot delete a published item photo'
 );
 
