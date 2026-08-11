@@ -20,7 +20,11 @@ create table public.items (
   created_at timestamptz not null default now(),
   constraint items_pricing_consistent check (
     (is_free and price_per_day_cents is null)
-    or (not is_free and price_per_day_cents between 1 and 100000)
+    or (
+      not is_free
+      and price_per_day_cents is not null
+      and price_per_day_cents between 1 and 100000
+    )
   ),
   constraint items_photo_path_matches_id check (
     photo_path ~ ('^' || id::text || '/photo\.(jpg|png|webp)$')
