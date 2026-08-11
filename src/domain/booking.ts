@@ -7,8 +7,20 @@ export interface BookingRequest {
   status: "requested" | "accepted" | "refused";
   is_borrower: boolean;
   is_item_owner: boolean;
+  can_decide: boolean;
   borrower_label: "You" | "Community member";
 }
+
+export interface BookingContact {
+  booking_id: string;
+  counterparty_email: string;
+}
+
+export const bookingStatusLabel: Record<BookingRequest["status"], string> = {
+  requested: "Requested",
+  accepted: "Accepted",
+  refused: "Refused",
+};
 
 export function validateBookingDates(
   startDate: string,

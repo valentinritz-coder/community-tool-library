@@ -6,7 +6,12 @@ import type { FormEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import type { Community } from "../domain/community";
-import { validateBookingDates, type BookingRequest } from "../domain/booking";
+import {
+  bookingStatusLabel,
+  validateBookingDates,
+  type BookingContact,
+  type BookingRequest,
+} from "../domain/booking";
 import {
   availabilityLabel,
   validateAvailabilityDates,
@@ -39,6 +44,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
+  const [bookingContacts, setBookingContacts] = useState<BookingContact[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [paid, setPaid] = useState(false);
@@ -49,29 +55,36 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     const communityId = inventoryCommunityId || communities.at(0)?.id || "";
-    const [ownedResult, inventoryResult, availabilityResult, bookingResult] =
-      await Promise.all([
-        supabase
-          .from("items")
-          .select(
-            "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
-          )
-          .order("created_at", { ascending: false }),
-        communityId
-          ? supabase.rpc("browse_community_inventory", {
-              target_community_id: communityId,
-            })
-          : Promise.resolve({ data: [], error: null }),
-        supabase
-          .from("availabilities")
-          .select("id,item_id,start_date,end_date")
-          .order("start_date", { ascending: true }),
-        supabase.rpc("list_booking_requests"),
-      ]);
+    const [
+      ownedResult,
+      inventoryResult,
+      availabilityResult,
+      bookingResult,
+      contactResult,
+    ] = await Promise.all([
+      supabase
+        .from("items")
+        .select(
+          "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
+        )
+        .order("created_at", { ascending: false }),
+      communityId
+        ? supabase.rpc("browse_community_inventory", {
+            target_community_id: communityId,
+          })
+        : Promise.resolve({ data: [], error: null }),
+      supabase
+        .from("availabilities")
+        .select("id,item_id,start_date,end_date")
+        .order("start_date", { ascending: true }),
+      supabase.rpc("list_booking_requests"),
+      supabase.rpc("list_accepted_booking_contacts"),
+    ]);
     if (ownedResult.error) throw ownedResult.error;
     if (inventoryResult.error) throw inventoryResult.error;
     if (availabilityResult.error) throw availabilityResult.error;
     if (bookingResult.error) throw bookingResult.error;
+    if (contactResult.error) throw contactResult.error;
     const nextItems = ownedResult.data as Item[];
     const nextInventory = inventoryResult.data as InventoryItem[];
     const urls: Record<string, string> = {};
@@ -87,6 +100,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     setInventory(nextInventory);
     setAvailabilities(availabilityResult.data as Availability[]);
     setBookings(bookingResult.data as BookingRequest[]);
+    setBookingContacts(contactResult.data as BookingContact[]);
     setPhotoUrls(urls);
     setLoading(false);
   }, [communities, inventoryCommunityId]);
@@ -320,6 +334,55 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     setMessage("Reservation request created with Requested status.");
   }
 
+  async function decideBooking(
+    booking: BookingRequest,
+    decision: "accepted" | "refused",
+  ) {
+    setMessage("");
+    const result = await getSupabaseBrowserClient().rpc("decide_booking", {
+      target_booking_id: booking.id,
+      decision,
+    });
+    if (result.error) {
+      const serverMessage = result.error.message;
+      if (serverMessage.includes("already been decided")) {
+        setMessage(
+          "This reservation request has already been decided. Refreshing its status.",
+        );
+      } else if (serverMessage.includes("conflict")) {
+        setMessage(
+          "These dates conflict with another accepted reservation. The request remains Requested.",
+        );
+      } else if (serverMessage.includes("no longer fully available")) {
+        setMessage(
+          "The item is no longer available for all of these dates. The request remains Requested.",
+        );
+      } else if (serverMessage.includes("no longer valid")) {
+        setMessage(
+          "This reservation request is no longer valid and could not be accepted.",
+        );
+      } else if (serverMessage.includes("Only the item owner")) {
+        setMessage(
+          "You are not authorized to decide this reservation request.",
+        );
+      } else {
+        setMessage(messageFor(result.error));
+      }
+      await refresh().catch(() => undefined);
+      return;
+    }
+    await refresh();
+    setMessage(
+      decision === "accepted"
+        ? "Reservation accepted. The participants can now see each other's contact email."
+        : "Reservation refused.",
+    );
+  }
+
+  function contactFor(bookingId: string): BookingContact | undefined {
+    return bookingContacts.find((contact) => contact.booking_id === bookingId);
+  }
+
   return (
     <section className="card wide" aria-labelledby="items-title">
       <h2 id="items-title">Community inventory</h2>
@@ -435,7 +498,13 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   <span>
                     {booking.start_date} through {booking.end_date}
                   </span>
-                  <span>Status: Requested</span>
+                  <span>Status: {bookingStatusLabel[booking.status]}</span>
+                  {contactFor(booking.id) && (
+                    <span>
+                      Contact email:{" "}
+                      {contactFor(booking.id)!.counterparty_email}
+                    </span>
+                  )}
                 </li>
               ))}
           </ul>
@@ -445,13 +514,15 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         className="booking-requests"
         aria-labelledby="owner-bookings-title"
       >
-        <h3 id="owner-bookings-title">Requests for your items</h3>
-        {bookings.filter((booking) => booking.is_item_owner).length === 0 ? (
-          <p>No pending requests for your items.</p>
+        <h3 id="owner-bookings-title">Reservation decisions</h3>
+        {bookings.filter(
+          (booking) => booking.is_item_owner || booking.can_decide,
+        ).length === 0 ? (
+          <p>No reservation requests for you to decide.</p>
         ) : (
           <ul>
             {bookings
-              .filter((booking) => booking.is_item_owner)
+              .filter((booking) => booking.is_item_owner || booking.can_decide)
               .map((booking) => (
                 <li key={`owner-${booking.id}`}>
                   <strong>{booking.item_name}</strong>
@@ -459,7 +530,32 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                     {booking.start_date} through {booking.end_date}
                   </span>
                   <span>Requested by: {booking.borrower_label}</span>
-                  <span>Status: Requested</span>
+                  <span>Status: {bookingStatusLabel[booking.status]}</span>
+                  {contactFor(booking.id) && (
+                    <span>
+                      Contact email:{" "}
+                      {contactFor(booking.id)!.counterparty_email}
+                    </span>
+                  )}
+                  {booking.status === "requested" && (
+                    <div className="booking-actions">
+                      <button
+                        type="button"
+                        aria-label={`Accept reservation for ${booking.item_name}`}
+                        onClick={() => void decideBooking(booking, "accepted")}
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-label={`Refuse reservation for ${booking.item_name}`}
+                        onClick={() => void decideBooking(booking, "refused")}
+                      >
+                        Refuse
+                      </button>
+                    </div>
+                  )}
                 </li>
               ))}
           </ul>

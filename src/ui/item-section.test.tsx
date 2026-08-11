@@ -337,7 +337,7 @@ describe("ItemSection", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows privacy-safe owner requests without decision actions", async () => {
+  it("shows privacy-safe owner requests with decision actions", async () => {
     rpc.mockResolvedValueOnce({ data: [], error: null }).mockResolvedValueOnce({
       data: [
         {
@@ -349,6 +349,7 @@ describe("ItemSection", () => {
           status: "requested",
           is_borrower: false,
           is_item_owner: true,
+          can_decide: true,
           borrower_label: "Community member",
         },
       ],
@@ -366,7 +367,212 @@ describe("ItemSection", () => {
       await screen.findByText("Requested by: Community member"),
     ).toBeInTheDocument();
     expect(screen.getByText("Status: Requested")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /accept|refuse/i })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Accept reservation for Drill" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Refuse reservation for Drill" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/@|phone|pickup/i)).toBeNull();
+  });
+
+  it("shows terminal booking statuses and accepted contact without actions", async () => {
+    rpc.mockImplementation((name: string) => {
+      if (name === "list_booking_requests") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-08-15",
+              end_date: "2026-08-16",
+              status: "accepted",
+              is_borrower: true,
+              is_item_owner: false,
+              can_decide: false,
+              borrower_label: "You",
+            },
+            {
+              id: "booking-b",
+              item_id: "item-b",
+              item_name: "Sander",
+              start_date: "2026-08-20",
+              end_date: "2026-08-20",
+              status: "refused",
+              is_borrower: true,
+              is_item_owner: false,
+              can_decide: false,
+              borrower_label: "You",
+            },
+          ],
+          error: null,
+        });
+      }
+      if (name === "list_accepted_booking_contacts") {
+        return Promise.resolve({
+          data: [
+            {
+              booking_id: "booking-a",
+              counterparty_email: "owner@example.test",
+            },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="borrower-a"
+      />,
+    );
+    expect(await screen.findByText("Status: Accepted")).toBeInTheDocument();
+    expect(screen.getByText("Status: Refused")).toBeInTheDocument();
+    expect(
+      screen.getByText("Contact email: owner@example.test"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept|refuse/i })).toBeNull();
+  });
+
+  it("keeps terminal bookings for the item owner without decision actions", async () => {
+    rpc.mockImplementation((name: string) => {
+      if (name === "list_booking_requests") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-08-15",
+              end_date: "2026-08-16",
+              status: "accepted",
+              is_borrower: false,
+              is_item_owner: true,
+              can_decide: false,
+              borrower_label: "Community member",
+            },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="owner-a"
+      />,
+    );
+
+    expect(await screen.findByText("Status: Accepted")).toBeInTheDocument();
+    expect(
+      screen.getByText("Requested by: Community member"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept|refuse/i })).toBeNull();
+  });
+
+  it("uses the decision RPC and refreshes authoritative status", async () => {
+    let decided = false;
+    rpc.mockImplementation((name: string, parameters?: unknown) => {
+      if (name === "list_booking_requests") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-08-15",
+              end_date: "2026-08-16",
+              status: decided ? "accepted" : "requested",
+              is_borrower: false,
+              is_item_owner: true,
+              can_decide: true,
+              borrower_label: "Community member",
+            },
+          ],
+          error: null,
+        });
+      }
+      if (name === "decide_booking") {
+        expect(parameters).toEqual({
+          target_booking_id: "booking-a",
+          decision: "accepted",
+        });
+        decided = true;
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="owner-a"
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Accept reservation for Drill",
+      }),
+    );
+    expect(await screen.findByText("Status: Accepted")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept|refuse/i })).toBeNull();
+  });
+
+  it("presents a server conflict clearly and keeps the refreshed status", async () => {
+    rpc.mockImplementation((name: string) => {
+      if (name === "list_booking_requests") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-08-15",
+              end_date: "2026-08-16",
+              status: "requested",
+              is_borrower: false,
+              is_item_owner: false,
+              can_decide: true,
+              borrower_label: "Community member",
+            },
+          ],
+          error: null,
+        });
+      }
+      if (name === "decide_booking") {
+        return Promise.resolve({
+          data: null,
+          error: new Error(
+            "These dates conflict with another accepted booking",
+          ),
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="admin-a"
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Accept reservation for Drill",
+      }),
+    );
+    expect(
+      await screen.findByText(/conflict with another accepted reservation/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Status: Requested")).toBeInTheDocument();
   });
 });
