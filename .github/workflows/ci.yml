@@ -33,6 +33,9 @@ jobs:
       - name: Test Supabase authorization
         run: npm run supabase:test
 
+      - name: Test concurrent booking lifecycle transitions
+        run: npm run test:db-concurrency
+
       - name: Lint
         run: npm run lint
 
