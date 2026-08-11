@@ -1,5 +1,5 @@
-import { LandingPage } from "@/ui/landing-page";
+import { CommunityPage } from "@/ui/community-page";
 
 export default function Home() {
-  return <LandingPage />;
+  return <CommunityPage />;
 }
