@@ -75,7 +75,7 @@ describe("ItemSection", () => {
           price_per_day_cents: 450,
           is_owned: false,
           availability_summary:
-            "Available from 2026-08-12 through 2026-08-15; Unavailable on 2026-08-18",
+            "Available only from 2026-08-12 through 2026-08-15; on 2026-08-18",
         },
       ],
       error: null,
@@ -100,7 +100,7 @@ describe("ItemSection", () => {
     expect(screen.getByText("Owner: Community member")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Availability: Available from 2026-08-12 through 2026-08-15; Unavailable on 2026-08-18",
+        "Availability: Available only from 2026-08-12 through 2026-08-15; on 2026-08-18",
       ),
     ).toBeInTheDocument();
     expect(
@@ -151,7 +151,9 @@ describe("ItemSection", () => {
     expect(
       await screen.findByText("No availability ranges set."),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Range type")).toHaveValue("available");
+    expect(
+      screen.getByText(/The item is unavailable by default/),
+    ).toBeInTheDocument();
     const start = screen.getByLabelText("Start date (included)");
     const end = screen.getByLabelText("End date (included)");
     fireEvent.change(start, { target: { value: "2026-08-15" } });
@@ -173,7 +175,6 @@ describe("ItemSection", () => {
     await waitFor(() =>
       expect(query.insert).toHaveBeenCalledWith({
         item_id: "item-a",
-        kind: "available",
         start_date: "2026-08-15",
         end_date: "2026-08-15",
       }),
@@ -193,7 +194,8 @@ describe("ItemSection", () => {
           is_free: true,
           price_per_day_cents: null,
           is_owned: false,
-          availability_summary: "Not set by the owner.",
+          availability_summary:
+            "Unavailable: the owner has not added available dates.",
         },
       ],
       error: null,
@@ -207,7 +209,9 @@ describe("ItemSection", () => {
       />,
     );
     expect(
-      await screen.findByText("Availability: Not set by the owner."),
+      await screen.findByText(
+        "Availability: Unavailable: the owner has not added available dates.",
+      ),
     ).toBeInTheDocument();
   });
 

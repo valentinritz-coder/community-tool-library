@@ -7,7 +7,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { Community } from "../domain/community";
 import {
-  availabilityKinds,
   availabilityLabel,
   validateAvailabilityDates,
   type Availability,
@@ -63,7 +62,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from("availabilities")
-          .select("id,item_id,kind,start_date,end_date")
+          .select("id,item_id,start_date,end_date")
           .order("start_date", { ascending: true }),
       ]);
     if (ownedResult.error) throw ownedResult.error;
@@ -253,7 +252,6 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       .from("availabilities")
       .insert({
         item_id: itemId,
-        kind: String(form.get("kind")),
         start_date: startDate,
         end_date: endDate,
       });
@@ -459,7 +457,8 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
             <section aria-labelledby={`availability-${item.id}`}>
               <h4 id={`availability-${item.id}`}>Availability</h4>
               <p>
-                Dates are calendar days. Start and end dates are both included.
+                The item is unavailable by default. Add the calendar dates when
+                it is available; start and end dates are both included.
               </p>
               {availabilities.filter((range) => range.item_id === item.id)
                 .length === 0 ? (
@@ -484,20 +483,6 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                 </ul>
               )}
               <form onSubmit={(event) => void addAvailability(event, item.id)}>
-                <label htmlFor={`availability-kind-${item.id}`}>
-                  Range type
-                </label>
-                <select
-                  id={`availability-kind-${item.id}`}
-                  name="kind"
-                  required
-                >
-                  {availabilityKinds.map((kind) => (
-                    <option key={kind.value} value={kind.value}>
-                      {kind.label}
-                    </option>
-                  ))}
-                </select>
                 <label htmlFor={`availability-start-${item.id}`}>
                   Start date (included)
                 </label>

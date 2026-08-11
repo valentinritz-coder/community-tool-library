@@ -1,14 +1,14 @@
-create type public.availability_kind as enum ('available', 'unavailable');
-
 create extension if not exists btree_gist with schema extensions;
 
 create table public.availabilities (
   id uuid primary key default gen_random_uuid(),
   item_id uuid not null references public.items(id) on delete cascade,
-  kind public.availability_kind not null,
   start_date date not null,
   end_date date not null,
   created_at timestamptz not null default now(),
+  constraint availability_dates_are_finite check (
+    isfinite(start_date) and isfinite(end_date)
+  ),
   constraint availability_dates_in_order check (start_date <= end_date),
   constraint availability_ranges_do_not_overlap exclude using gist (
     item_id with =,
@@ -17,13 +17,13 @@ create table public.availabilities (
 );
 
 comment on table public.availabilities is
-  'Explicit available or unavailable calendar-date ranges. Both boundaries are inclusive; ranges for one item may not overlap.';
+  'Dates are unavailable by default. A date is available only when covered by one of these non-overlapping ranges. Both boundaries are inclusive and finite.';
 
 alter table public.availabilities enable row level security;
 
 revoke all on public.availabilities from anon, authenticated;
 grant select, insert, delete on public.availabilities to authenticated;
-grant update (kind, start_date, end_date) on public.availabilities to authenticated;
+grant update (start_date, end_date) on public.availabilities to authenticated;
 
 create policy "active owners can read availability"
 on public.availabilities for select to authenticated
@@ -115,22 +115,18 @@ begin
     items.owner_id = auth.uid(),
     coalesce(
       (
-        select string_agg(
-          case availability.kind
-            when 'available' then 'Available'
-            else 'Unavailable'
-          end ||
+        select 'Available only ' || string_agg(
           case
             when availability.start_date = availability.end_date
-              then ' on ' || availability.start_date::text
-            else ' from ' || availability.start_date::text || ' through ' || availability.end_date::text
+              then 'on ' || availability.start_date::text
+            else 'from ' || availability.start_date::text || ' through ' || availability.end_date::text
           end,
           '; ' order by availability.start_date, availability.end_date
         )
         from public.availabilities as availability
         where availability.item_id = items.id
       ),
-      'Not set by the owner.'
+      'Unavailable: the owner has not added available dates.'
     )
   from public.items
   where items.community_id = target_community_id
