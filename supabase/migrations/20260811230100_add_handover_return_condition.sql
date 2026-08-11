@@ -29,6 +29,7 @@ create table public.condition_reports (
   booking_id uuid not null references public.bookings(id) on delete restrict,
   phase public.condition_phase not null,
   photo_path text not null unique,
+  mime_type text not null check (mime_type in ('image/jpeg', 'image/png', 'image/webp')),
   author_id uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
   constraint condition_photo_path_matches_report check (
@@ -38,7 +39,8 @@ create table public.condition_reports (
 
 alter table public.condition_reports enable row level security;
 revoke all on public.condition_reports from anon, authenticated;
-grant select on public.condition_reports to authenticated;
+grant select (id, booking_id, phase, photo_path, created_at)
+on public.condition_reports to authenticated;
 
 create function public.can_read_condition_report(target_booking_id uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
@@ -67,10 +69,11 @@ begin
           (expected_status = 'checked_out' and next_status = 'returned')) then
     raise exception 'Invalid lifecycle action' using errcode = '22023';
   end if;
-  select b, i.owner_id into target_booking, owner_id
-  from public.bookings b join public.items i on i.id = b.item_id
-  where b.id = target_booking_id for update of b;
+  select b.* into target_booking
+  from public.bookings b
+  where b.id = target_booking_id for update;
   if target_booking is null then raise exception 'Booking not found' using errcode = 'P0002'; end if;
+  select i.owner_id into owner_id from public.items i where i.id = target_booking.item_id;
   -- Membership is deliberately not rechecked: the real participants must be able to
   -- complete an already accepted exchange even if membership later changes.
   if auth.uid() not in (target_booking.borrower_id, owner_id) then
@@ -104,16 +107,22 @@ grant execute on function public.record_return(uuid) to authenticated;
 create function public.create_condition_report(target_booking_id uuid, report_phase public.condition_phase, photo_extension text)
 returns table (id uuid, booking_id uuid, phase public.condition_phase, photo_path text, created_at timestamptz)
 language plpgsql security definer set search_path = '' as $$
-declare b public.bookings; owner_id uuid; report_id uuid := gen_random_uuid(); report public.condition_reports;
+declare b public.bookings; owner_id uuid; report_id uuid := gen_random_uuid(); report_mime_type text; report public.condition_reports;
 begin
   if auth.uid() is null then raise exception 'Authentication required' using errcode = '42501'; end if;
   if photo_extension not in ('jpg', 'png', 'webp') then
     raise exception 'Photo must be JPEG, PNG, or WebP' using errcode = '22023';
   end if;
-  select bookings, items.owner_id into b, owner_id
-  from public.bookings join public.items on items.id = bookings.item_id
-  where bookings.id = target_booking_id for update of bookings;
+  report_mime_type := case photo_extension
+    when 'jpg' then 'image/jpeg'
+    when 'png' then 'image/png'
+    when 'webp' then 'image/webp'
+  end;
+  select bookings.* into b
+  from public.bookings
+  where bookings.id = target_booking_id for update;
   if b is null then raise exception 'Booking not found' using errcode = 'P0002'; end if;
+  select items.owner_id into owner_id from public.items where items.id = b.item_id;
   if auth.uid() not in (b.borrower_id, owner_id) then
     raise exception 'Only transaction participants can add condition evidence' using errcode = '42501';
   end if;
@@ -121,10 +130,10 @@ begin
           (report_phase = 'after' and b.status = 'checked_out')) then
     raise exception 'Condition evidence is not allowed in this booking state' using errcode = '55000';
   end if;
-  insert into public.condition_reports (id, booking_id, phase, photo_path, author_id)
+  insert into public.condition_reports (id, booking_id, phase, photo_path, mime_type, author_id)
   values (report_id, b.id, report_phase,
     b.id::text || '/' || report_phase::text || '/' || report_id::text || '.' || photo_extension,
-    auth.uid()) returning * into report;
+    report_mime_type, auth.uid()) returning * into report;
   return query select report.id, report.booking_id, report.phase, report.photo_path, report.created_at;
 end;
 $$;
@@ -147,6 +156,7 @@ for insert to authenticated with check (
     select 1 from public.condition_reports r
     join public.bookings b on b.id = r.booking_id join public.items i on i.id = b.item_id
     where r.photo_path = name and r.author_id = auth.uid()
+      and metadata->>'mimetype' = r.mime_type
       and auth.uid() in (b.borrower_id, i.owner_id)
       and ((r.phase = 'before' and b.status = 'accepted') or (r.phase = 'after' and b.status = 'checked_out'))
   )
@@ -183,7 +193,8 @@ begin
   return query select b.id, case when b.borrower_id = auth.uid() then ou.email::text else bu.email::text end
   from public.bookings b join public.items i on i.id = b.item_id
   join auth.users bu on bu.id = b.borrower_id join auth.users ou on ou.id = i.owner_id
-  where b.status in ('accepted','checked_out','returned')
+  where b.status = 'accepted'
+    and public.is_active_community_member(i.community_id)
     and (b.borrower_id = auth.uid() or i.owner_id = auth.uid());
 end;
 $$;

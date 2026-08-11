@@ -59,6 +59,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000002',true);
 select is((select status::text from public.record_return('b3000000-0000-4000-8000-000000000002')),'returned','participant can finish checked-out exchange after membership becomes inactive');
 select is((select count(*) from public.list_booking_requests() where id='b3000000-0000-4000-8000-000000000002' and status='returned'),1::bigint,'returned history remains visible to borrower');
+select is((select count(*) from public.list_accepted_booking_contacts()),0::bigint,'returned history does not retain counterparty email after membership changes');
 reset role;
 
 -- Evidence has immutable metadata; only the RPC can create it in the matching phase.
@@ -69,8 +70,18 @@ select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000002'
 create temporary table before_report as select * from public.create_condition_report('b3000000-0000-4000-8000-000000000010','before','jpg');
 select is((select phase::text from before_report),'before','before evidence is reserved while accepted');
 select throws_ok($$select * from public.create_condition_report('b3000000-0000-4000-8000-000000000010','after','jpg')$$,'55000','Condition evidence is not allowed in this booking state','after evidence is rejected while accepted');
+create temporary table mismatched_report as select * from public.create_condition_report('b3000000-0000-4000-8000-000000000010','before','jpg');
+select throws_ok(
+  format('insert into storage.objects(bucket_id,name,metadata) values (%L,%L,%L)','condition-photos',(select photo_path from mismatched_report),'{"mimetype":"image/png"}'),
+  '42501', null, 'storage rejects MIME metadata that does not match the reserved extension'
+);
+select throws_ok(
+  $$insert into storage.objects(bucket_id,name,metadata) values ('condition-photos','b3000000-0000-4000-8000-000000000099/before/ffffffff-ffff-4fff-8fff-ffffffffffff.jpg','{"mimetype":"image/jpeg"}')$$,
+  '42501', null, 'storage rejects a forged booking and report path'
+);
 select lives_ok(format('insert into storage.objects(bucket_id,name,metadata) values (%L,%L,%L)','condition-photos',(select photo_path from before_report),'{"mimetype":"image/jpeg"}'),'participant uploads exact reserved before path');
-select is((select count(*) from public.condition_reports),1::bigint,'borrower reads condition report');
+select is((select count(*) from public.condition_reports),2::bigint,'borrower reads condition reports for the booking');
+select throws_ok($$select author_id from public.condition_reports$$,'42501',null,'condition report projection does not expose raw author UUIDs');
 select lives_ok($$select * from public.record_handover('b3000000-0000-4000-8000-000000000010')$$,'handover advances evidence phase');
 select throws_ok($$select * from public.create_condition_report('b3000000-0000-4000-8000-000000000010','before','png')$$,'55000','Condition evidence is not allowed in this booking state','late before evidence is rejected');
 create temporary table after_report as select * from public.create_condition_report('b3000000-0000-4000-8000-000000000010','after','png');
@@ -81,27 +92,46 @@ select throws_ok($$select * from public.create_condition_report('b3000000-0000-4
 select throws_ok($$update public.condition_reports set phase='after'$$,'42501',null,'participants cannot rewrite evidence metadata');
 select throws_ok($$delete from public.condition_reports$$,'42501',null,'participants cannot delete historical evidence');
 select is((select count(*) from storage.objects where bucket_id='condition-photos'),2::bigint,'borrower reads both private photos');
+select throws_ok($$update storage.objects set metadata='{"mimetype":"image/webp"}' where bucket_id='condition-photos'$$,'42501',null,'participants cannot rewrite condition photo objects');
+select throws_ok($$delete from storage.objects where bucket_id='condition-photos'$$,'42501',null,'participants cannot delete condition photo objects');
 
 select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000001',true);
-select is((select count(*) from public.condition_reports),2::bigint,'owner reads both reports');
+select is((select count(*) from public.condition_reports),3::bigint,'other booking participant reads all reports');
 select is((select count(*) from storage.objects where bucket_id='condition-photos'),2::bigint,'owner reads both photos');
 select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000004',true);
-select is((select count(*) from public.condition_reports),2::bigint,'active same-community admin can read evidence');
+select is((select count(*) from public.condition_reports),3::bigint,'active same-community admin can read evidence');
 select is((select count(*) from storage.objects where bucket_id='condition-photos'),2::bigint,'active same-community admin can read photos');
 select throws_ok($$select * from public.create_condition_report('b3000000-0000-4000-8000-000000000010','after','jpg')$$,'42501','Only transaction participants can add condition evidence','admin cannot upload evidence');
+select throws_ok(
+  format('insert into storage.objects(bucket_id,name,metadata) values (%L,%L,%L)','condition-photos',(select photo_path from mismatched_report),'{"mimetype":"image/jpeg"}'),
+  '42501', null, 'same-community admin cannot upload a participant condition photo'
+);
 select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000003',true);
 select is((select count(*) from public.condition_reports),0::bigint,'unrelated member cannot read evidence');
 select is((select count(*) from storage.objects where bucket_id='condition-photos'),0::bigint,'unrelated member cannot read photos');
 select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000007',true);
 select is((select count(*) from public.condition_reports),0::bigint,'cross-community admin cannot read evidence');
+select is((select count(*) from storage.objects where bucket_id='condition-photos'),0::bigint,'cross-community admin cannot read photos');
+select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000005',true);
+select is((select count(*) from public.condition_reports),0::bigint,'pending unrelated member cannot read evidence');
+select is((select count(*) from storage.objects where bucket_id='condition-photos'),0::bigint,'pending unrelated member cannot read photos');
 select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000006',true);
 select is((select count(*) from public.condition_reports),0::bigint,'non-member cannot read evidence');
 select is((select count(*) from public.list_booking_requests() where status='returned'),0::bigint,'unrelated user sees no returned history');
 reset role;
 set local role anon;
+select is((select count(*) from public.condition_reports),0::bigint,'anon cannot read condition reports');
+select is((select count(*) from storage.objects where bucket_id='condition-photos'),0::bigint,'anon cannot read condition photos');
+select throws_ok(
+  $$insert into storage.objects(bucket_id,name,metadata) values ('condition-photos','b3000000-0000-4000-8000-000000000010/before/ffffffff-ffff-4fff-8fff-ffffffffffff.jpg','{"mimetype":"image/jpeg"}')$$,
+  '42501', null, 'anon cannot upload condition photos'
+);
 select throws_ok($$select * from public.record_handover('b3000000-0000-4000-8000-000000000010')$$,'42501',null,'anon cannot call lifecycle RPC');
 select throws_ok($$select * from public.create_condition_report('b3000000-0000-4000-8000-000000000010','after','jpg')$$,'42501',null,'anon cannot create evidence');
 reset role;
+
+select is((select file_size_limit from storage.buckets where id='condition-photos'),5242880::bigint,'condition photo bucket enforces the 5 MB upload limit');
+select is((select allowed_mime_types from storage.buckets where id='condition-photos'),array['image/jpeg','image/png','image/webp']::text[],'condition photo bucket allows only the three supported MIME types');
 
 select throws_ok($$update public.bookings set status='checked_out' where id='b3000000-0000-4000-8000-000000000010'$$,'55000','Invalid booking status transition','returned cannot become checked out');
 select throws_ok($$update public.bookings set status='accepted' where id='b3000000-0000-4000-8000-000000000010'$$,'55000','Invalid booking status transition','returned cannot become accepted');
