@@ -36,7 +36,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     const result = await supabase
       .from("items")
       .select(
-        "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived",
+        "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
       )
       .order("created_at", { ascending: false });
     if (result.error) throw result.error;
@@ -104,6 +104,10 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           upsert: false,
         });
       if (uploaded.error) throw uploaded.error;
+      const published = await supabase.rpc("publish_item", {
+        target_item_id: item.id,
+      });
+      if (published.error) throw published.error;
       event.currentTarget.reset();
       setPaid(false);
       await refresh();
@@ -159,6 +163,16 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         if (uploaded.error) {
           setMessage(messageFor(uploaded.error));
           return;
+        }
+        if (!item.photo_uploaded) {
+          const published = await getSupabaseBrowserClient().rpc(
+            "publish_item",
+            { target_item_id: item.id },
+          );
+          if (published.error) {
+            setMessage(messageFor(published.error));
+            return;
+          }
         }
       }
       await refresh();

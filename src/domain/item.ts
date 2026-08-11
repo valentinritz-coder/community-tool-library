@@ -18,6 +18,7 @@ export interface Item {
   is_free: boolean;
   price_per_day_cents: number | null;
   archived: boolean;
+  photo_uploaded: boolean;
 }
 
 export function priceToCents(price: string): number | null {

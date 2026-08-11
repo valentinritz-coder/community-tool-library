@@ -16,6 +16,7 @@ create table public.items (
   is_free boolean not null,
   price_per_day_cents integer,
   archived boolean not null default false,
+  photo_uploaded boolean not null default false,
   created_at timestamptz not null default now(),
   constraint items_pricing_consistent check (
     (is_free and price_per_day_cents is null)
@@ -29,11 +30,16 @@ create table public.items (
 alter table public.items enable row level security;
 
 revoke all on public.items from anon, authenticated;
-grant select, update on public.items to authenticated;
+grant select on public.items to authenticated;
+grant update (name, category, description, is_free, price_per_day_cents, archived)
+on public.items to authenticated;
 
 create policy "active members can read community items"
 on public.items for select to authenticated
-using ((select public.is_active_community_member(community_id)));
+using (
+  (select public.is_active_community_member(community_id))
+  and (photo_uploaded or owner_id = (select auth.uid()))
+);
 
 create policy "owners can update their items"
 on public.items for update to authenticated
@@ -60,6 +66,9 @@ begin
   end if;
   if new.photo_path <> old.photo_path then
     raise exception 'Item photo path cannot be changed' using errcode = '42501';
+  end if;
+  if new.created_at <> old.created_at then
+    raise exception 'Item creation time cannot be changed' using errcode = '42501';
   end if;
   return new;
 end;
@@ -113,6 +122,48 @@ $$;
 revoke all on function public.create_item(uuid, text, public.item_category, text, boolean, integer, text) from public;
 grant execute on function public.create_item(uuid, text, public.item_category, text, boolean, integer, text) to authenticated;
 
+create function public.publish_item(target_item_id uuid)
+returns public.items
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  published_item public.items;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+
+  select * into published_item
+  from public.items
+  where id = target_item_id
+    and owner_id = auth.uid()
+    and public.is_active_community_member(community_id);
+
+  if published_item is null then
+    raise exception 'Only the active item owner can publish it' using errcode = '42501';
+  end if;
+  if not exists (
+    select 1 from storage.objects
+    where bucket_id = 'item-photos'
+      and name = published_item.photo_path
+  ) then
+    raise exception 'Item photo upload required' using errcode = '23514';
+  end if;
+
+  update public.items
+  set photo_uploaded = true
+  where id = target_item_id
+  returning * into published_item;
+
+  return published_item;
+end;
+$$;
+
+revoke all on function public.publish_item(uuid) from public;
+grant execute on function public.publish_item(uuid) to authenticated;
+
 drop policy "owners can read their item photo objects" on storage.objects;
 drop policy "owners can upload their item photo objects" on storage.objects;
 
@@ -124,6 +175,7 @@ using (
     select 1 from public.items
     where items.id::text = (storage.foldername(name))[1]
       and items.photo_path = name
+      and items.photo_uploaded
       and public.is_active_community_member(items.community_id)
   )
 );
@@ -153,18 +205,6 @@ using (
   )
 )
 with check (
-  bucket_id = 'item-photos'
-  and exists (
-    select 1 from public.items
-    where items.photo_path = name
-      and items.owner_id = auth.uid()
-      and public.is_active_community_member(items.community_id)
-  )
-);
-
-create policy "item owners can delete their photo"
-on storage.objects for delete to authenticated
-using (
   bucket_id = 'item-photos'
   and exists (
     select 1 from public.items

@@ -43,7 +43,9 @@ The item migration replaces the proof's owner-folder policies. An object path is
 and its single declared photo filename. Storage policies resolve that UUID to `items`, then use the
 authenticated item's owner for writes and active community membership for reads. A guessed path is
 therefore not sufficient authorization. The bucket remains private and keeps its JPEG, PNG, WebP,
-and 5 MB restrictions.
+and 5 MB restrictions. Item creation produces an owner-visible draft; `publish_item` makes it
+visible to other active members only after verifying that its exact Storage object exists. Storage
+deletion is intentionally not granted, so a published item cannot lose its required photo.
 
 ## Configuration boundaries
 
