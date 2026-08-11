@@ -3,13 +3,16 @@
 /* eslint-disable @next/next/no-img-element -- private, short-lived signed Storage URLs cannot be statically optimized */
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { Community } from "../domain/community";
 import {
+  inventoryItems,
+  itemCategoryLabel,
   itemCategories,
   photoExtension,
   priceToCents,
+  type InventoryItem,
   type Item,
 } from "../domain/item";
 import { getSupabaseBrowserClient } from "../infrastructure/supabase-browser";
@@ -27,23 +30,37 @@ function messageFor(error: unknown): string {
 
 export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [items, setItems] = useState<Item[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [paid, setPaid] = useState(false);
+  const [search, setSearch] = useState("");
+  const [inventoryCommunityId, setInventoryCommunityId] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const result = await supabase
-      .from("items")
-      .select(
-        "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
-      )
-      .order("created_at", { ascending: false });
-    if (result.error) throw result.error;
-    const nextItems = result.data as Item[];
+    const communityId = inventoryCommunityId || communities.at(0)?.id || "";
+    const [ownedResult, inventoryResult] = await Promise.all([
+      supabase
+        .from("items")
+        .select(
+          "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
+        )
+        .order("created_at", { ascending: false }),
+      communityId
+        ? supabase.rpc("browse_community_inventory", {
+            target_community_id: communityId,
+          })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (ownedResult.error) throw ownedResult.error;
+    if (inventoryResult.error) throw inventoryResult.error;
+    const nextItems = ownedResult.data as Item[];
+    const nextInventory = inventoryResult.data as InventoryItem[];
     const urls: Record<string, string> = {};
     await Promise.all(
-      nextItems.map(async (item) => {
+      [...nextInventory, ...nextItems].map(async (item) => {
         const signed = await supabase.storage
           .from("item-photos")
           .createSignedUrl(item.photo_path, 300);
@@ -51,15 +68,26 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       }),
     );
     setItems(nextItems);
+    setInventory(nextInventory);
     setPhotoUrls(urls);
-  }
+    setLoading(false);
+  }, [communities, inventoryCommunityId]);
 
   useEffect(() => {
     const loadItems = window.setTimeout(() => {
-      void refresh().catch((error: unknown) => setMessage(messageFor(error)));
+      void refresh().catch((error: unknown) => {
+        setLoading(false);
+        setMessage(messageFor(error));
+      });
     }, 0);
     return () => window.clearTimeout(loadItems);
-  }, [communities]);
+  }, [refresh]);
+
+  const selectedCommunityId =
+    inventoryCommunityId || communities.at(0)?.id || "";
+  const communityInventory = inventoryItems(inventory, search);
+  const publishedInventory = inventoryItems(inventory, "");
+  const ownItems = items.filter((item) => item.owner_id === currentUserId);
 
   async function createItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -194,10 +222,79 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
 
   return (
     <section className="card wide" aria-labelledby="items-title">
-      <h2 id="items-title">Community items</h2>
+      <h2 id="items-title">Community inventory</h2>
       <p className="notice" role="status" aria-live="polite">
         {message}
       </p>
+      {communities.length === 0 ? (
+        <p>Join a community as an active member to browse its inventory.</p>
+      ) : (
+        <>
+          <div className="inventory-controls">
+            <label htmlFor="inventory-community">Community</label>
+            <select
+              id="inventory-community"
+              value={selectedCommunityId}
+              onChange={(event) => setInventoryCommunityId(event.target.value)}
+            >
+              {communities.map((community) => (
+                <option key={community.id} value={community.id}>
+                  {community.name}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="inventory-search">Search inventory</label>
+            <input
+              id="inventory-search"
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Item name or category"
+            />
+          </div>
+          {loading ? (
+            <p role="status">Loading community inventory…</p>
+          ) : communityInventory.length > 0 ? (
+            <div className="item-list" aria-live="polite">
+              {communityInventory.map((item) => (
+                <article key={item.id} className="item-card">
+                  {photoUrls[item.id] ? (
+                    <img
+                      src={photoUrls[item.id]}
+                      alt={`Photo of ${item.name}`}
+                    />
+                  ) : (
+                    <p>Photo temporarily unavailable.</p>
+                  )}
+                  <h3>{item.name}</h3>
+                  <p className="item-category">
+                    {itemCategoryLabel(item.category)}
+                  </p>
+                  <p>{item.description}</p>
+                  <p>
+                    <strong>
+                      {item.is_free
+                        ? "Free loan"
+                        : `${(item.price_per_day_cents! / 100).toFixed(2)} per day`}
+                    </strong>
+                  </p>
+                  <p>Owner: {item.is_owned ? "You" : "Community member"}</p>
+                  <p>Availability: not set yet</p>
+                </article>
+              ))}
+            </div>
+          ) : publishedInventory.length === 0 ? (
+            <p className="empty-state">
+              This community does not have any listed items yet.
+            </p>
+          ) : (
+            <p className="empty-state" role="status">
+              No items match your search. Try an item name or category.
+            </p>
+          )}
+        </>
+      )}
+      <h3 className="manage-title">List and manage your items</h3>
       {communities.length > 0 && (
         <form onSubmit={(event) => void createItem(event)}>
           <label htmlFor="item-community">Community</label>
@@ -281,7 +378,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         </form>
       )}
       <div className="item-list">
-        {items.map((item) => (
+        {ownItems.map((item) => (
           <article key={item.id} className="item-card">
             {photoUrls[item.id] && (
               <img src={photoUrls[item.id]} alt={`Photo of ${item.name}`} />
