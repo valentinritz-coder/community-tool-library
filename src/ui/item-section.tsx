@@ -11,6 +11,8 @@ import {
   validateBookingDates,
   type BookingContact,
   type BookingRequest,
+  type ConditionPhase,
+  type ConditionReport,
 } from "../domain/booking";
 import {
   availabilityLabel,
@@ -45,6 +47,12 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [bookingContacts, setBookingContacts] = useState<BookingContact[]>([]);
+  const [conditionReports, setConditionReports] = useState<ConditionReport[]>(
+    [],
+  );
+  const [conditionPhotoUrls, setConditionPhotoUrls] = useState<
+    Record<string, string>
+  >({});
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [paid, setPaid] = useState(false);
@@ -61,6 +69,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       availabilityResult,
       bookingResult,
       contactResult,
+      conditionResult,
     ] = await Promise.all([
       supabase
         .from("items")
@@ -79,12 +88,17 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         .order("start_date", { ascending: true }),
       supabase.rpc("list_booking_requests"),
       supabase.rpc("list_accepted_booking_contacts"),
+      supabase
+        .from("condition_reports")
+        .select("id,booking_id,phase,photo_path,created_at")
+        .order("created_at", { ascending: true }),
     ]);
     if (ownedResult.error) throw ownedResult.error;
     if (inventoryResult.error) throw inventoryResult.error;
     if (availabilityResult.error) throw availabilityResult.error;
     if (bookingResult.error) throw bookingResult.error;
     if (contactResult.error) throw contactResult.error;
+    if (conditionResult.error) throw conditionResult.error;
     const nextItems = ownedResult.data as Item[];
     const nextInventory = inventoryResult.data as InventoryItem[];
     const urls: Record<string, string> = {};
@@ -101,6 +115,18 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     setAvailabilities(availabilityResult.data as Availability[]);
     setBookings(bookingResult.data as BookingRequest[]);
     setBookingContacts(contactResult.data as BookingContact[]);
+    const reports = conditionResult.data as ConditionReport[];
+    const conditionUrls: Record<string, string> = {};
+    await Promise.all(
+      reports.map(async (report) => {
+        const signed = await supabase.storage
+          .from("condition-photos")
+          .createSignedUrl(report.photo_path, 300);
+        if (!signed.error) conditionUrls[report.id] = signed.data.signedUrl;
+      }),
+    );
+    setConditionReports(reports);
+    setConditionPhotoUrls(conditionUrls);
     setPhotoUrls(urls);
     setLoading(false);
   }, [communities, inventoryCommunityId]);
@@ -379,6 +405,149 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     );
   }
 
+  async function advanceBooking(booking: BookingRequest) {
+    setMessage("");
+    const handover = booking.status === "accepted";
+    const result = await getSupabaseBrowserClient().rpc(
+      handover ? "record_handover" : "record_return",
+      { target_booking_id: booking.id },
+    );
+    if (result.error) {
+      setMessage(
+        result.error.message.includes("required state")
+          ? "This transaction was already updated. Refreshing its status."
+          : messageFor(result.error),
+      );
+      await refresh().catch(() => undefined);
+      return;
+    }
+    await refresh();
+    setMessage(
+      handover
+        ? "Handover recorded. Status is now Checked out."
+        : "Return recorded. This transaction is now in your history.",
+    );
+  }
+
+  async function uploadCondition(
+    event: FormEvent<HTMLFormElement>,
+    booking: BookingRequest,
+    phase: ConditionPhase,
+  ) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const photo = new FormData(formElement).get("condition_photo");
+    if (!(photo instanceof File) || photo.size === 0) {
+      setMessage("Choose a condition photo.");
+      return;
+    }
+    const extension = photoExtension(photo);
+    if (!extension) {
+      setMessage("Use a JPEG, PNG, or WebP photo.");
+      return;
+    }
+    if (photo.size > 5 * 1024 * 1024) {
+      setMessage("The photo must be 5 MB or smaller.");
+      return;
+    }
+    const supabase = getSupabaseBrowserClient();
+    const reserved = await supabase.rpc("create_condition_report", {
+      target_booking_id: booking.id,
+      report_phase: phase,
+      photo_extension: extension,
+    });
+    if (reserved.error) {
+      setMessage(messageFor(reserved.error));
+      await refresh().catch(() => undefined);
+      return;
+    }
+    const report = (reserved.data as ConditionReport[])[0];
+    if (!report) {
+      setMessage("The condition photo could not be prepared. Try again.");
+      return;
+    }
+    const uploaded = await supabase.storage
+      .from("condition-photos")
+      .upload(report.photo_path, photo, {
+        contentType: photo.type,
+        upsert: false,
+      });
+    if (uploaded.error) {
+      setMessage("The condition photo could not be uploaded. Try again.");
+      return;
+    }
+    formElement.reset();
+    await refresh();
+    setMessage(
+      `${phase === "before" ? "Before" : "After"} condition photo added.`,
+    );
+  }
+
+  function workflow(booking: BookingRequest) {
+    const phase: ConditionPhase | null =
+      booking.status === "accepted"
+        ? "before"
+        : booking.status === "checked_out"
+          ? "after"
+          : null;
+    const reports = conditionReports.filter(
+      (report) => report.booking_id === booking.id,
+    );
+    return (
+      <>
+        {reports.length > 0 && (
+          <div
+            className="condition-evidence"
+            aria-label={`Condition evidence for ${booking.item_name}`}
+          >
+            {reports.map(
+              (report) =>
+                conditionPhotoUrls[report.id] && (
+                  <figure key={report.id}>
+                    <img
+                      src={conditionPhotoUrls[report.id]}
+                      alt={`${report.phase === "before" ? "Before" : "After"} condition evidence for ${booking.item_name}`}
+                    />
+                    <figcaption>
+                      {report.phase === "before" ? "Before" : "After"} condition
+                    </figcaption>
+                  </figure>
+                ),
+            )}
+          </div>
+        )}
+        {phase && (
+          <form
+            aria-label={`Add ${phase} condition for ${booking.item_name}`}
+            onSubmit={(event) => void uploadCondition(event, booking, phase)}
+          >
+            <label htmlFor={`condition-${phase}-${booking.id}`}>
+              {phase === "before" ? "Before" : "After"} condition photo
+              (optional; JPEG, PNG, or WebP; maximum 5 MB)
+            </label>
+            <input
+              id={`condition-${phase}-${booking.id}`}
+              name="condition_photo"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+            />
+            <button type="submit">Add {phase} condition photo</button>
+          </form>
+        )}
+        {booking.status === "accepted" && (
+          <button type="button" onClick={() => void advanceBooking(booking)}>
+            Mark as handed over
+          </button>
+        )}
+        {booking.status === "checked_out" && (
+          <button type="button" onClick={() => void advanceBooking(booking)}>
+            Mark as returned
+          </button>
+        )}
+      </>
+    );
+  }
+
   function contactFor(bookingId: string): BookingContact | undefined {
     return bookingContacts.find((contact) => contact.booking_id === bookingId);
   }
@@ -486,12 +655,17 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         aria-labelledby="your-bookings-title"
       >
         <h3 id="your-bookings-title">Your reservation requests</h3>
-        {bookings.filter((booking) => booking.is_borrower).length === 0 ? (
+        {bookings.filter(
+          (booking) => booking.is_borrower && booking.status !== "returned",
+        ).length === 0 ? (
           <p>You have not requested a reservation yet.</p>
         ) : (
           <ul>
             {bookings
-              .filter((booking) => booking.is_borrower)
+              .filter(
+                (booking) =>
+                  booking.is_borrower && booking.status !== "returned",
+              )
               .map((booking) => (
                 <li key={`borrower-${booking.id}`}>
                   <strong>{booking.item_name}</strong>
@@ -505,6 +679,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                       {contactFor(booking.id)!.counterparty_email}
                     </span>
                   )}
+                  {workflow(booking)}
                 </li>
               ))}
           </ul>
@@ -516,13 +691,19 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       >
         <h3 id="owner-bookings-title">Reservation decisions</h3>
         {bookings.filter(
-          (booking) => booking.is_item_owner || booking.can_decide,
+          (booking) =>
+            (booking.is_item_owner || booking.can_decide) &&
+            booking.status !== "returned",
         ).length === 0 ? (
           <p>No reservation requests for you to decide.</p>
         ) : (
           <ul>
             {bookings
-              .filter((booking) => booking.is_item_owner || booking.can_decide)
+              .filter(
+                (booking) =>
+                  (booking.is_item_owner || booking.can_decide) &&
+                  booking.status !== "returned",
+              )
               .map((booking) => (
                 <li key={`owner-${booking.id}`}>
                   <strong>{booking.item_name}</strong>
@@ -537,6 +718,8 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                       {contactFor(booking.id)!.counterparty_email}
                     </span>
                   )}
+                  {(booking.is_item_owner || booking.is_borrower) &&
+                    workflow(booking)}
                   {booking.status === "requested" && (
                     <div className="booking-actions">
                       <button
@@ -556,6 +739,35 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                       </button>
                     </div>
                   )}
+                </li>
+              ))}
+          </ul>
+        )}
+      </section>
+      <section className="booking-requests" aria-labelledby="history-title">
+        <h3 id="history-title">Returned transaction history</h3>
+        {bookings.filter(
+          (booking) =>
+            booking.status === "returned" &&
+            (booking.is_borrower || booking.is_item_owner),
+        ).length === 0 ? (
+          <p>No returned transactions yet.</p>
+        ) : (
+          <ul>
+            {bookings
+              .filter(
+                (booking) =>
+                  booking.status === "returned" &&
+                  (booking.is_borrower || booking.is_item_owner),
+              )
+              .map((booking) => (
+                <li key={`history-${booking.id}`}>
+                  <strong>{booking.item_name}</strong>
+                  <span>
+                    {booking.start_date} through {booking.end_date}
+                  </span>
+                  <span>Status: {bookingStatusLabel[booking.status]}</span>
+                  {workflow(booking)}
                 </li>
               ))}
           </ul>
