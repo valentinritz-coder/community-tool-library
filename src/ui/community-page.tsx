@@ -9,6 +9,7 @@ import {
   type Membership,
 } from "../domain/community";
 import { getSupabaseBrowserClient } from "../infrastructure/supabase-browser";
+import { ItemSection } from "./item-section";
 
 interface CommunityState {
   communities: Community[];
@@ -288,6 +289,10 @@ export function CommunityPage() {
                 </ul>
               )}
             </section>
+            <ItemSection
+              communities={state.communities}
+              currentUserId={currentUserId}
+            />
             <button
               type="button"
               className="secondary sign-out"
