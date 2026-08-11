@@ -21,6 +21,18 @@ export interface Item {
   photo_uploaded: boolean;
 }
 
+export interface InventoryItem {
+  id: string;
+  community_id: string;
+  name: string;
+  category: ItemCategory;
+  description: string;
+  photo_path: string;
+  is_free: boolean;
+  price_per_day_cents: number | null;
+  is_owned: boolean;
+}
+
 export function itemCategoryLabel(category: ItemCategory): string {
   return (
     itemCategories.find((candidate) => candidate.value === category)?.label ??
@@ -28,11 +40,13 @@ export function itemCategoryLabel(category: ItemCategory): string {
   );
 }
 
-export function inventoryItems(items: Item[], search: string): Item[] {
+export function inventoryItems(
+  items: InventoryItem[],
+  search: string,
+): InventoryItem[] {
   const query = search.trim().toLocaleLowerCase();
 
   return items.filter((item) => {
-    if (item.archived || !item.photo_uploaded) return false;
     if (!query) return true;
 
     return (

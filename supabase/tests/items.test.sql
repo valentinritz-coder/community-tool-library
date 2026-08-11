@@ -1,6 +1,6 @@
 begin;
 
-select plan(47);
+select plan(58);
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password
@@ -198,8 +198,79 @@ select lives_ok(
 select is((select photo_uploaded from public.items), true, 'publishing records the verified photo state');
 
 select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000002', true);
-select is((select count(*) from public.items), 1::bigint, 'an active same-community member can read the published item');
+select is(
+  (select count(*) from public.browse_community_inventory((select community_id from item_test_context))),
+  1::bigint,
+  'an active same-community member can browse the published item'
+);
 select is((select count(*) from storage.objects where bucket_id = 'item-photos'), 1::bigint, 'an active same-community member can read the photo');
+select is(
+  (select count(*) from public.items where owner_id = '50000000-0000-4000-8000-000000000001'),
+  0::bigint,
+  'a browsing member cannot retrieve the raw owner id from the items table'
+);
+select throws_ok(
+  format(
+    'select owner_id from public.browse_community_inventory(%L)',
+    (select community_id from item_test_context)
+  ),
+  '42703',
+  'column "owner_id" does not exist',
+  'the inventory projection does not expose an owner id column'
+);
+
+select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000003', true);
+select is(
+  (select count(*) from public.items where id = (select item_id from item_test_context)),
+  0::bigint,
+  'a pending same-community member cannot read a known published item id'
+);
+select is(
+  (select count(*) from storage.objects where name = (select photo_path from item_test_context)),
+  0::bigint,
+  'a pending same-community member cannot read the published photo'
+);
+select throws_ok(
+  format('select * from public.browse_community_inventory(%L)', (select community_id from item_test_context)),
+  '42501', 'Active community membership required',
+  'a pending member cannot browse by supplying the community id'
+);
+
+select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000004', true);
+select is(
+  (select count(*) from public.items where id = (select item_id from item_test_context)),
+  0::bigint,
+  'a non-member cannot read a known published item id'
+);
+select is(
+  (select count(*) from storage.objects where name = (select photo_path from item_test_context)),
+  0::bigint,
+  'a non-member cannot read the published photo'
+);
+select throws_ok(
+  format('select * from public.browse_community_inventory(%L)', (select community_id from item_test_context)),
+  '42501', 'Active community membership required',
+  'a non-member cannot browse by supplying the community id'
+);
+
+select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000005', true);
+select is(
+  (select count(*) from public.items where id = (select item_id from item_test_context)),
+  0::bigint,
+  'an active member of another community cannot read a known published item id'
+);
+select is(
+  (select count(*) from storage.objects where name = (select photo_path from item_test_context)),
+  0::bigint,
+  'an active member of another community cannot read the published photo'
+);
+select throws_ok(
+  format('select * from public.browse_community_inventory(%L)', (select community_id from item_test_context)),
+  '42501', 'Active community membership required',
+  'another community member cannot browse by supplying the community id'
+);
+
+select set_config('request.jwt.claim.sub', '50000000-0000-4000-8000-000000000002', true);
 select is_empty(
   $$update storage.objects set metadata = '{"mimetype":"image/png"}'
     where name = (select photo_path from item_test_context) returning 1$$,

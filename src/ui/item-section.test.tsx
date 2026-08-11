@@ -7,6 +7,7 @@ const query = {
   select: vi.fn(() => query),
   order: vi.fn().mockResolvedValue({ data: [], error: null }),
 };
+const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
 
 const createSignedUrl = vi.fn((path: string) =>
   Promise.resolve({
@@ -18,6 +19,7 @@ const createSignedUrl = vi.fn((path: string) =>
 vi.mock("../infrastructure/supabase-browser", () => ({
   getSupabaseBrowserClient: () => ({
     from: vi.fn(() => query),
+    rpc,
     storage: {
       from: vi.fn(() => ({ createSignedUrl })),
     },
@@ -27,6 +29,7 @@ vi.mock("../infrastructure/supabase-browser", () => ({
 describe("ItemSection", () => {
   beforeEach(() => {
     query.order.mockResolvedValue({ data: [], error: null });
+    rpc.mockResolvedValue({ data: [], error: null });
   });
 
   it("offers a labelled, low-risk mobile item form", () => {
@@ -56,20 +59,18 @@ describe("ItemSection", () => {
   });
 
   it("shows searchable inventory details and a clear no-result state", async () => {
-    query.order.mockResolvedValueOnce({
+    rpc.mockResolvedValueOnce({
       data: [
         {
           id: "item-a",
           community_id: "community-a",
-          owner_id: "owner-a",
           name: "Cordless screwdriver",
           category: "small_diy",
           description: "Compact and easy to carry",
           photo_path: "item-a/photo.jpg",
           is_free: false,
           price_per_day_cents: 450,
-          archived: false,
-          photo_uploaded: true,
+          is_owned: false,
         },
       ],
       error: null,

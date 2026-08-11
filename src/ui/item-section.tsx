@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- private, short-lived signed Storage URLs cannot be statically optimized */
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { Community } from "../domain/community";
 import {
@@ -12,6 +12,7 @@ import {
   itemCategories,
   photoExtension,
   priceToCents,
+  type InventoryItem,
   type Item,
 } from "../domain/item";
 import { getSupabaseBrowserClient } from "../infrastructure/supabase-browser";
@@ -29,6 +30,7 @@ function messageFor(error: unknown): string {
 
 export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [items, setItems] = useState<Item[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [paid, setPaid] = useState(false);
@@ -36,19 +38,29 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [inventoryCommunityId, setInventoryCommunityId] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    const result = await supabase
-      .from("items")
-      .select(
-        "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
-      )
-      .order("created_at", { ascending: false });
-    if (result.error) throw result.error;
-    const nextItems = result.data as Item[];
+    const communityId = inventoryCommunityId || communities.at(0)?.id || "";
+    const [ownedResult, inventoryResult] = await Promise.all([
+      supabase
+        .from("items")
+        .select(
+          "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
+        )
+        .order("created_at", { ascending: false }),
+      communityId
+        ? supabase.rpc("browse_community_inventory", {
+            target_community_id: communityId,
+          })
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (ownedResult.error) throw ownedResult.error;
+    if (inventoryResult.error) throw inventoryResult.error;
+    const nextItems = ownedResult.data as Item[];
+    const nextInventory = inventoryResult.data as InventoryItem[];
     const urls: Record<string, string> = {};
     await Promise.all(
-      nextItems.map(async (item) => {
+      [...nextInventory, ...nextItems].map(async (item) => {
         const signed = await supabase.storage
           .from("item-photos")
           .createSignedUrl(item.photo_path, 300);
@@ -56,9 +68,10 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       }),
     );
     setItems(nextItems);
+    setInventory(nextInventory);
     setPhotoUrls(urls);
     setLoading(false);
-  }
+  }, [communities, inventoryCommunityId]);
 
   useEffect(() => {
     const loadItems = window.setTimeout(() => {
@@ -68,18 +81,12 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       });
     }, 0);
     return () => window.clearTimeout(loadItems);
-  }, [communities]);
+  }, [refresh]);
 
   const selectedCommunityId =
     inventoryCommunityId || communities.at(0)?.id || "";
-  const communityInventory = inventoryItems(
-    items.filter((item) => item.community_id === selectedCommunityId),
-    search,
-  );
-  const publishedInventory = inventoryItems(
-    items.filter((item) => item.community_id === selectedCommunityId),
-    "",
-  );
+  const communityInventory = inventoryItems(inventory, search);
+  const publishedInventory = inventoryItems(inventory, "");
   const ownItems = items.filter((item) => item.owner_id === currentUserId);
 
   async function createItem(event: FormEvent<HTMLFormElement>) {
@@ -271,12 +278,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         : `${(item.price_per_day_cents! / 100).toFixed(2)} per day`}
                     </strong>
                   </p>
-                  <p>
-                    Owner:{" "}
-                    {item.owner_id === currentUserId
-                      ? "You"
-                      : "Community member"}
-                  </p>
+                  <p>Owner: {item.is_owned ? "You" : "Community member"}</p>
                   <p>Availability: not set yet</p>
                 </article>
               ))}

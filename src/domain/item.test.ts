@@ -4,21 +4,19 @@ import {
   inventoryItems,
   photoExtension,
   priceToCents,
-  type Item,
+  type InventoryItem,
 } from "./item";
 
-const item = (overrides: Partial<Item>): Item => ({
+const item = (overrides: Partial<InventoryItem>): InventoryItem => ({
   id: "item-a",
   community_id: "community-a",
-  owner_id: "owner-a",
   name: "Cordless screwdriver",
   category: "small_diy",
   description: "Compact screwdriver",
   photo_path: "item-a/photo.jpg",
   is_free: true,
   price_per_day_cents: null,
-  archived: false,
-  photo_uploaded: true,
+  is_owned: false,
   ...overrides,
 });
 
@@ -44,11 +42,9 @@ describe("inventoryItems", () => {
   const items = [
     item({}),
     item({ id: "item-b", name: "Picnic set", category: "leisure" }),
-    item({ id: "draft", name: "Draft drill", photo_uploaded: false }),
-    item({ id: "archived", name: "Old drill", archived: true }),
   ];
 
-  it("keeps only published, non-archived items", () => {
+  it("keeps the complete authorized inventory when search is empty", () => {
     expect(inventoryItems(items, "").map(({ id }) => id)).toEqual([
       "item-a",
       "item-b",
