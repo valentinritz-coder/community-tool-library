@@ -6,6 +6,7 @@ import type { FormEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import type { Community } from "../domain/community";
+import { validateBookingDates, type BookingRequest } from "../domain/booking";
 import {
   availabilityLabel,
   validateAvailabilityDates,
@@ -37,6 +38,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
+  const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [paid, setPaid] = useState(false);
@@ -47,7 +49,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     const communityId = inventoryCommunityId || communities.at(0)?.id || "";
-    const [ownedResult, inventoryResult, availabilityResult] =
+    const [ownedResult, inventoryResult, availabilityResult, bookingResult] =
       await Promise.all([
         supabase
           .from("items")
@@ -64,10 +66,12 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           .from("availabilities")
           .select("id,item_id,start_date,end_date")
           .order("start_date", { ascending: true }),
+        supabase.rpc("list_booking_requests"),
       ]);
     if (ownedResult.error) throw ownedResult.error;
     if (inventoryResult.error) throw inventoryResult.error;
     if (availabilityResult.error) throw availabilityResult.error;
+    if (bookingResult.error) throw bookingResult.error;
     const nextItems = ownedResult.data as Item[];
     const nextInventory = inventoryResult.data as InventoryItem[];
     const urls: Record<string, string> = {};
@@ -82,6 +86,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     setItems(nextItems);
     setInventory(nextInventory);
     setAvailabilities(availabilityResult.data as Availability[]);
+    setBookings(bookingResult.data as BookingRequest[]);
     setPhotoUrls(urls);
     setLoading(false);
   }, [communities, inventoryCommunityId]);
@@ -281,6 +286,40 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     }
   }
 
+  async function requestBooking(
+    event: FormEvent<HTMLFormElement>,
+    itemId: string,
+  ) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    setMessage("");
+    const form = new FormData(formElement);
+    const startDate = String(form.get("start_date") ?? "");
+    const endDate = String(form.get("end_date") ?? "");
+    const dateError = validateBookingDates(startDate, endDate);
+    if (dateError) {
+      setMessage(dateError);
+      return;
+    }
+
+    const result = await getSupabaseBrowserClient().rpc("request_booking", {
+      target_item_id: itemId,
+      requested_start_date: startDate,
+      requested_end_date: endDate,
+    });
+    if (result.error) {
+      setMessage(
+        result.error.message.includes("not fully available")
+          ? "Those dates are not fully available. Choose dates covered by the owner's availability."
+          : messageFor(result.error),
+      );
+      return;
+    }
+    formElement.reset();
+    await refresh();
+    setMessage("Reservation request created with Requested status.");
+  }
+
   return (
     <section className="card wide" aria-labelledby="items-title">
       <h2 id="items-title">Community inventory</h2>
@@ -341,6 +380,30 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   </p>
                   <p>Owner: {item.is_owned ? "You" : "Community member"}</p>
                   <p>Availability: {item.availability_summary}</p>
+                  {!item.is_owned && (
+                    <form
+                      aria-label={`Request ${item.name}`}
+                      onSubmit={(event) => void requestBooking(event, item.id)}
+                    >
+                      <label htmlFor={`booking-start-${item.id}`}>
+                        Start date
+                      </label>
+                      <input
+                        id={`booking-start-${item.id}`}
+                        name="start_date"
+                        type="date"
+                        required
+                      />
+                      <label htmlFor={`booking-end-${item.id}`}>End date</label>
+                      <input
+                        id={`booking-end-${item.id}`}
+                        name="end_date"
+                        type="date"
+                        required
+                      />
+                      <button type="submit">Request reservation</button>
+                    </form>
+                  )}
                 </article>
               ))}
             </div>
@@ -355,6 +418,53 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           )}
         </>
       )}
+      <section
+        className="booking-requests"
+        aria-labelledby="your-bookings-title"
+      >
+        <h3 id="your-bookings-title">Your reservation requests</h3>
+        {bookings.filter((booking) => booking.is_borrower).length === 0 ? (
+          <p>You have not requested a reservation yet.</p>
+        ) : (
+          <ul>
+            {bookings
+              .filter((booking) => booking.is_borrower)
+              .map((booking) => (
+                <li key={`borrower-${booking.id}`}>
+                  <strong>{booking.item_name}</strong>
+                  <span>
+                    {booking.start_date} through {booking.end_date}
+                  </span>
+                  <span>Status: Requested</span>
+                </li>
+              ))}
+          </ul>
+        )}
+      </section>
+      <section
+        className="booking-requests"
+        aria-labelledby="owner-bookings-title"
+      >
+        <h3 id="owner-bookings-title">Requests for your items</h3>
+        {bookings.filter((booking) => booking.is_item_owner).length === 0 ? (
+          <p>No pending requests for your items.</p>
+        ) : (
+          <ul>
+            {bookings
+              .filter((booking) => booking.is_item_owner)
+              .map((booking) => (
+                <li key={`owner-${booking.id}`}>
+                  <strong>{booking.item_name}</strong>
+                  <span>
+                    {booking.start_date} through {booking.end_date}
+                  </span>
+                  <span>Requested by: {booking.borrower_label}</span>
+                  <span>Status: Requested</span>
+                </li>
+              ))}
+          </ul>
+        )}
+      </section>
       <h3 className="manage-title">List and manage your items</h3>
       {communities.length > 0 && (
         <form onSubmit={(event) => void createItem(event)}>

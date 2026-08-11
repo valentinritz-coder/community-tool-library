@@ -31,6 +31,7 @@ vi.mock("../infrastructure/supabase-browser", () => ({
 
 describe("ItemSection", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     query.order.mockResolvedValue({ data: [], error: null });
     rpc.mockResolvedValue({ data: [], error: null });
   });
@@ -228,5 +229,144 @@ describe("ItemSection", () => {
     expect(
       await screen.findByText(/does not have any listed items yet/),
     ).toBeInTheDocument();
+  });
+
+  it("submits labelled booking dates and confirms Requested status", async () => {
+    rpc.mockImplementation((name: string) => {
+      if (name === "browse_community_inventory") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "item-a",
+              community_id: "community-a",
+              name: "Drill",
+              category: "small_diy",
+              description: "Small drill",
+              photo_path: "item-a/photo.jpg",
+              is_free: true,
+              price_per_day_cents: null,
+              is_owned: false,
+              availability_summary: "Available only on 2026-08-15",
+            },
+          ],
+          error: null,
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="member-a"
+      />,
+    );
+
+    const start = await screen.findByLabelText("Start date");
+    const end = screen.getByLabelText("End date");
+    fireEvent.change(start, { target: { value: "2026-08-15" } });
+    fireEvent.change(end, { target: { value: "2026-08-15" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Request reservation" }),
+    );
+
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("request_booking", {
+        target_item_id: "item-a",
+        requested_start_date: "2026-08-15",
+        requested_end_date: "2026-08-15",
+      }),
+    );
+    expect(
+      await screen.findByText(
+        "Reservation request created with Requested status.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an understandable unavailable error", async () => {
+    rpc.mockImplementation((name: string) => {
+      if (name === "browse_community_inventory") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "item-a",
+              community_id: "community-a",
+              name: "Drill",
+              category: "small_diy",
+              description: "Small drill",
+              photo_path: "item-a/photo.jpg",
+              is_free: true,
+              price_per_day_cents: null,
+              is_owned: false,
+              availability_summary: "Available only on 2026-08-15",
+            },
+          ],
+          error: null,
+        });
+      }
+      if (name === "request_booking") {
+        return Promise.resolve({
+          data: null,
+          error: new Error("The requested dates are not fully available"),
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="member-a"
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText("Start date"), {
+      target: { value: "2026-08-16" },
+    });
+    fireEvent.change(screen.getByLabelText("End date"), {
+      target: { value: "2026-08-16" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Request reservation" }),
+    );
+    expect(
+      await screen.findByText(/Those dates are not fully available/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows privacy-safe owner requests without decision actions", async () => {
+    rpc.mockResolvedValueOnce({ data: [], error: null }).mockResolvedValueOnce({
+      data: [
+        {
+          id: "booking-a",
+          item_id: "item-a",
+          item_name: "Drill",
+          start_date: "2026-08-15",
+          end_date: "2026-08-16",
+          status: "requested",
+          is_borrower: false,
+          is_item_owner: true,
+          borrower_label: "Community member",
+        },
+      ],
+      error: null,
+    });
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="owner-a"
+      />,
+    );
+    expect(
+      await screen.findByText("Requested by: Community member"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Status: Requested")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /accept|refuse/i })).toBeNull();
+    expect(screen.queryByText(/@|phone|pickup/i)).toBeNull();
   });
 });
