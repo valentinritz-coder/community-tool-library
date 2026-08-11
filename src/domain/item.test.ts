@@ -17,6 +17,7 @@ const item = (overrides: Partial<InventoryItem>): InventoryItem => ({
   is_free: true,
   price_per_day_cents: null,
   is_owned: false,
+  availability_summary: "Unavailable: the owner has not added available dates.",
   ...overrides,
 });
 

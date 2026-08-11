@@ -7,6 +7,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { Community } from "../domain/community";
 import {
+  availabilityLabel,
+  validateAvailabilityDates,
+  type Availability,
+} from "../domain/availability";
+import {
   inventoryItems,
   itemCategoryLabel,
   itemCategories,
@@ -31,6 +36,7 @@ function messageFor(error: unknown): string {
 export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [paid, setPaid] = useState(false);
@@ -41,21 +47,27 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     const communityId = inventoryCommunityId || communities.at(0)?.id || "";
-    const [ownedResult, inventoryResult] = await Promise.all([
-      supabase
-        .from("items")
-        .select(
-          "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
-        )
-        .order("created_at", { ascending: false }),
-      communityId
-        ? supabase.rpc("browse_community_inventory", {
-            target_community_id: communityId,
-          })
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+    const [ownedResult, inventoryResult, availabilityResult] =
+      await Promise.all([
+        supabase
+          .from("items")
+          .select(
+            "id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,archived,photo_uploaded",
+          )
+          .order("created_at", { ascending: false }),
+        communityId
+          ? supabase.rpc("browse_community_inventory", {
+              target_community_id: communityId,
+            })
+          : Promise.resolve({ data: [], error: null }),
+        supabase
+          .from("availabilities")
+          .select("id,item_id,start_date,end_date")
+          .order("start_date", { ascending: true }),
+      ]);
     if (ownedResult.error) throw ownedResult.error;
     if (inventoryResult.error) throw inventoryResult.error;
+    if (availabilityResult.error) throw availabilityResult.error;
     const nextItems = ownedResult.data as Item[];
     const nextInventory = inventoryResult.data as InventoryItem[];
     const urls: Record<string, string> = {};
@@ -69,6 +81,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     );
     setItems(nextItems);
     setInventory(nextInventory);
+    setAvailabilities(availabilityResult.data as Availability[]);
     setPhotoUrls(urls);
     setLoading(false);
   }, [communities, inventoryCommunityId]);
@@ -220,6 +233,54 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     }
   }
 
+  async function addAvailability(
+    event: FormEvent<HTMLFormElement>,
+    itemId: string,
+  ) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    setMessage("");
+    const form = new FormData(formElement);
+    const startDate = String(form.get("start_date") ?? "");
+    const endDate = String(form.get("end_date") ?? "");
+    const dateError = validateAvailabilityDates(startDate, endDate);
+    if (dateError) {
+      setMessage(dateError);
+      return;
+    }
+    const result = await getSupabaseBrowserClient()
+      .from("availabilities")
+      .insert({
+        item_id: itemId,
+        start_date: startDate,
+        end_date: endDate,
+      });
+    if (result.error) {
+      setMessage(
+        result.error.message.includes("availability_ranges_do_not_overlap")
+          ? "This range overlaps an existing availability range."
+          : messageFor(result.error),
+      );
+      return;
+    }
+    formElement.reset();
+    await refresh();
+    setMessage("Availability range added.");
+  }
+
+  async function removeAvailability(availabilityId: string) {
+    setMessage("");
+    const result = await getSupabaseBrowserClient()
+      .from("availabilities")
+      .delete()
+      .eq("id", availabilityId);
+    if (result.error) setMessage(messageFor(result.error));
+    else {
+      await refresh();
+      setMessage("Availability range removed.");
+    }
+  }
+
   return (
     <section className="card wide" aria-labelledby="items-title">
       <h2 id="items-title">Community inventory</h2>
@@ -279,7 +340,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                     </strong>
                   </p>
                   <p>Owner: {item.is_owned ? "You" : "Community member"}</p>
-                  <p>Availability: not set yet</p>
+                  <p>Availability: {item.availability_summary}</p>
                 </article>
               ))}
             </div>
@@ -393,6 +454,56 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                 ? "Free loan"
                 : `${(item.price_per_day_cents! / 100).toFixed(2)} per day`}
             </p>
+            <section aria-labelledby={`availability-${item.id}`}>
+              <h4 id={`availability-${item.id}`}>Availability</h4>
+              <p>
+                The item is unavailable by default. Add the calendar dates when
+                it is available; start and end dates are both included.
+              </p>
+              {availabilities.filter((range) => range.item_id === item.id)
+                .length === 0 ? (
+                <p>No availability ranges set.</p>
+              ) : (
+                <ul className="availability-list">
+                  {availabilities
+                    .filter((range) => range.item_id === item.id)
+                    .map((range) => (
+                      <li key={range.id}>
+                        <span>{availabilityLabel(range)}</span>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => void removeAvailability(range.id)}
+                          aria-label={`Remove ${availabilityLabel(range)}`}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              )}
+              <form onSubmit={(event) => void addAvailability(event, item.id)}>
+                <label htmlFor={`availability-start-${item.id}`}>
+                  Start date (included)
+                </label>
+                <input
+                  id={`availability-start-${item.id}`}
+                  name="start_date"
+                  type="date"
+                  required
+                />
+                <label htmlFor={`availability-end-${item.id}`}>
+                  End date (included)
+                </label>
+                <input
+                  id={`availability-end-${item.id}`}
+                  name="end_date"
+                  type="date"
+                  required
+                />
+                <button type="submit">Add availability range</button>
+              </form>
+            </section>
             {item.owner_id === currentUserId && (
               <details>
                 <summary>Edit item</summary>
