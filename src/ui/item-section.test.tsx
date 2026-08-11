@@ -24,7 +24,10 @@ vi.mock("../infrastructure/supabase-browser", () => ({
     from: vi.fn(() => query),
     rpc,
     storage: {
-      from: vi.fn(() => ({ createSignedUrl })),
+      from: vi.fn(() => ({
+        createSignedUrl,
+        upload: vi.fn().mockResolvedValue({ error: null }),
+      })),
     },
   }),
 }));
@@ -574,5 +577,96 @@ describe("ItemSection", () => {
       await screen.findByText(/conflict with another accepted reservation/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Status: Requested")).toBeInTheDocument();
+  });
+
+  it("advances accepted handover and checked-out return from authoritative refreshes", async () => {
+    let status: "accepted" | "checked_out" | "returned" = "accepted";
+    rpc.mockImplementation((name: string) => {
+      if (name === "list_booking_requests")
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-08-15",
+              end_date: "2026-08-16",
+              status,
+              is_borrower: true,
+              is_item_owner: false,
+              can_decide: false,
+              borrower_label: "You",
+            },
+          ],
+          error: null,
+        });
+      if (name === "record_handover") status = "checked_out";
+      if (name === "record_return") status = "returned";
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join" },
+        ]}
+        currentUserId="borrower-a"
+      />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Mark as handed over" }),
+    );
+    expect(await screen.findByText("Status: Checked out")).toBeInTheDocument();
+    expect(rpc).toHaveBeenCalledWith("record_handover", {
+      target_booking_id: "booking-a",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Mark as returned" }));
+    expect(
+      await screen.findByRole("heading", {
+        name: "Returned transaction history",
+      }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Status: Returned")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /handed over|returned/ }),
+    ).toBeNull();
+  });
+
+  it("offers phase-specific labelled condition evidence uploads", async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data:
+          name === "list_booking_requests"
+            ? [
+                {
+                  id: "booking-a",
+                  item_id: "item-a",
+                  item_name: "Drill",
+                  start_date: "2026-08-15",
+                  end_date: "2026-08-16",
+                  status: "accepted",
+                  is_borrower: true,
+                  is_item_owner: false,
+                  can_decide: false,
+                  borrower_label: "You",
+                },
+              ]
+            : [],
+        error: null,
+      }),
+    );
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join" },
+        ]}
+        currentUserId="borrower-a"
+      />,
+    );
+    const input = await screen.findByLabelText(/Before condition photo/);
+    expect(input).toHaveAttribute("accept", "image/jpeg,image/png,image/webp");
+    expect(
+      screen.getByRole("button", { name: "Add before condition photo" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/After condition photo/)).toBeNull();
   });
 });
