@@ -1,8 +1,7 @@
 # Local Supabase development
 
-This repository contains a deliberately minimal technical proof for ADR 0003. It validates the
-local migration, Row Level Security (RLS), and private object-storage workflow; it is not an MVP
-domain model.
+This repository uses the workflow validated for ADR 0003 for versioned domain migrations, Row
+Level Security (RLS), and private object storage.
 
 ## Prerequisites
 
@@ -33,25 +32,20 @@ schema is reproducible. Create later migrations with `npm run supabase -- migrat
 never edit an already-shared migration. Inspect local services with `npm run supabase:status` and
 stop them with `npm run supabase:stop`.
 
-## Security proof
-
-The single migration creates only two validation surfaces:
-
-1. `public.rls_validation_notes`, an explicitly temporary-style proof table whose rows are readable
-   and insertable only when `owner_id = auth.uid()`;
-2. a private `item-photos` bucket that accepts JPEG, PNG, and WebP images. Authenticated users may
-   insert and read only object names beginning with `<auth.uid()>/`.
+## Authorization tests
 
 `npm run supabase:test` runs pgTAP inside the local database. The tests switch to the actual
-`authenticated` database role and set synthetic JWT claims, then observe successful owner actions,
-invisible rows for another user, and RLS errors for forbidden inserts. Storage tests likewise prove
-an allowed upload/read and denied cross-user read/upload. They do not use `service_role` to perform
-the actions under test.
+`authenticated` database role and set synthetic JWT claims. Community, item, and Storage tests use
+real captured community and item IDs to exercise owner, active-member, pending-member, non-member,
+and cross-community boundaries. They do not use `service_role` for actions under test.
 
-These path policies are an authorization pattern, not the final item-photo design. A future item
-issue must connect paths to item/community permissions and decide update/delete semantics. Full
-authentication, users, communities, memberships, items, and application-side Supabase integration
-are intentionally outside this proof.
+The item migration replaces the proof's owner-folder policies. An object path is the item's UUID
+and its single declared photo filename. Storage policies resolve that UUID to `items`, then use the
+authenticated item's owner for writes and active community membership for reads. A guessed path is
+therefore not sufficient authorization. The bucket remains private and keeps its JPEG, PNG, WebP,
+and 5 MB restrictions. Item creation produces an owner-visible draft; `publish_item` makes it
+visible to other active members only after verifying that its exact Storage object exists. Storage
+deletion is intentionally not granted, so a published item cannot lose its required photo.
 
 ## Configuration boundaries
 

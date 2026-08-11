@@ -94,12 +94,38 @@ label {
 }
 
 input,
+select,
+textarea,
 button {
   border: 2px solid var(--accent-dark);
   border-radius: 0.55rem;
   font: inherit;
   min-height: 2.9rem;
   padding: 0.65rem 0.8rem;
+}
+
+textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+fieldset {
+  border: 1px solid #9eb2ac;
+  border-radius: 0.55rem;
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem;
+}
+
+fieldset label {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+fieldset input {
+  min-height: 1.5rem;
 }
 
 button {
@@ -115,8 +141,41 @@ button {
 }
 
 input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
 button:focus-visible,
 a:focus-visible {
+  outline: 0.2rem solid #f0a202;
+  outline-offset: 0.15rem;
+}
+
+.item-list {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.item-card {
+  border-top: 1px solid #dce5e2;
+  padding-top: 1rem;
+}
+
+.item-card img {
+  border-radius: 0.75rem;
+  display: block;
+  height: auto;
+  max-height: 20rem;
+  max-width: 100%;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 2.75rem;
+  padding-block: 0.75rem;
+}
+
+summary:focus-visible {
   outline: 0.2rem solid #f0a202;
   outline-offset: 0.15rem;
 }
