@@ -78,25 +78,22 @@ begin
   from public.items
   where items.id = target_item_id
     and items.photo_uploaded
-    and not items.archived;
+    and not items.archived
+    and items.owner_id <> auth.uid();
 
   if target_community_id is null
     or not public.is_active_community_member(target_community_id) then
     raise exception 'This item is not available to request' using errcode = '42501';
   end if;
 
-  if exists (
-    select 1
-    from generate_series(
-      requested_start_date::timestamp without time zone,
-      requested_end_date::timestamp without time zone,
-      '1 day'::interval
-    ) as requested_day
-    where not exists (
-      select 1 from public.availabilities
+  if not coalesce(
+    (
+      select range_agg(daterange(start_date, end_date, '[]'))
+        @> daterange(requested_start_date, requested_end_date, '[]')
+      from public.availabilities
       where availabilities.item_id = target_item_id
-        and requested_day::date between availabilities.start_date and availabilities.end_date
-    )
+    ),
+    false
   ) then
     raise exception 'The requested dates are not fully available' using errcode = '22023';
   end if;

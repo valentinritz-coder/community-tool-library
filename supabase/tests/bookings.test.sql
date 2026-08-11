@@ -1,6 +1,6 @@
 begin;
 
-select plan(35);
+select plan(39);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password) values
   ('80000000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner@example.test', ''),
@@ -55,6 +55,12 @@ select throws_ok($$select * from public.request_booking('82000000-0000-4000-8000
 select throws_ok($$select * from public.request_booking('82000000-0000-4000-8000-000000000001', '2026-08-15', '2026-08-16')$$, '22023', 'The requested dates are not fully available', 'a request exceeding an availability boundary is rejected');
 select throws_ok($$select * from public.request_booking('82000000-0000-4000-8000-000000000001', '2026-08-15', '2026-08-17')$$, '22023', 'The requested dates are not fully available', 'one unavailable day between ranges rejects the request');
 select throws_ok($$select * from public.request_booking('82000000-0000-4000-8000-000000000002', '2026-08-10', '2026-08-10')$$, '22023', 'The requested dates are not fully available', 'an item without availability is unavailable');
+select throws_ok($$select * from public.request_booking('82000000-0000-4000-8000-000000000001', '0001-01-01', '9999-12-31')$$, '22023', 'The requested dates are not fully available', 'a very large uncovered request is rejected without enumerating its days');
+select is(
+  position('generate_series' in pg_get_functiondef('public.request_booking(uuid,date,date)'::regprocedure)),
+  0,
+  'booking availability validation does not enumerate requested days'
+);
 select lives_ok($$select * from public.request_booking('82000000-0000-4000-8000-000000000001', '2026-08-11', '2026-08-14')$$, 'overlapping requested bookings remain non-exclusive');
 
 select throws_ok($$insert into public.bookings (item_id, borrower_id, start_date, end_date) values ('82000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', '2026-08-10', '2026-08-10')$$, '42501', null, 'a client cannot choose borrower_id with direct insert');
@@ -78,6 +84,8 @@ select is((select count(*) from public.list_booking_requests()), 0::bigint, 'a c
 
 select set_config('request.jwt.claim.sub', '80000000-0000-4000-8000-000000000001', true);
 select is((select count(*) from public.list_booking_requests()), 4::bigint, 'the item owner sees pending requests');
+select throws_ok($$select * from public.request_booking('82000000-0000-4000-8000-000000000001', '2026-08-10', '2026-08-10')$$, '42501', 'This item is not available to request', 'an active owner cannot request their own published available item');
+select is((select count(*) from public.list_booking_requests()), 4::bigint, 'a denied self-request creates no booking');
 select is((select borrower_label from public.list_booking_requests() limit 1), 'Community member', 'the owner gets only a generic borrower label');
 select throws_ok($$select borrower_id from public.list_booking_requests()$$, '42703', 'column "borrower_id" does not exist', 'owner projection excludes the raw auth UUID');
 select throws_ok($$select email from public.list_booking_requests()$$, '42703', 'column "email" does not exist', 'owner projection excludes contact details');
