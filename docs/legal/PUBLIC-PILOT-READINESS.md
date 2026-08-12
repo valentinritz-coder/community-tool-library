@@ -59,7 +59,9 @@ service eliminates liability.
       alone cannot describe their retention.
 - [ ] Confirm the deployed application has no analytics/advertising tracker. If that changes, reassess
       cookies/local storage before collection; do not add a consent manager when no tracker exists.
-- [ ] Complete issue #30’s separate moderation/reporting readiness; it is not implemented here.
+- [x] Provide issue #30's minimal reporting path, same-community admin queue, handled trace, and
+      effective listing hide boundary. Operational escalation ownership and the retention decision
+      remain launch work; bans, sanctions, and automated moderation are deliberately not implemented.
 - [ ] Establish the incident response contact/process already identified by the privacy notes.
 
 ## Deliberately not implemented by #29
@@ -69,7 +71,8 @@ service eliminates liability.
 - cookie consent tooling without an actual tracker;
 - identity/residence verification or collection of supporting documents;
 - payments, deposits, insurance, liability adjudication, or municipal guarantees;
-- moderation work owned by issue #30 or deployment/metrics work owned by issue #31.
+- bans/sanctions, automated moderation, appeals, or generic case management; deployment/metrics work
+  remains owned by issue #31.
 
 These omissions keep the MVP honest and small. They do not make unresolved public-launch blockers
 optional.

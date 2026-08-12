@@ -29,11 +29,19 @@ import {
   type Item,
 } from "../domain/item";
 import { getSupabaseBrowserClient } from "../infrastructure/supabase-browser";
+import {
+  moderationReasonLabel,
+  moderationReasons,
+  type ModerationReport,
+} from "../domain/moderation";
 
 interface ItemSectionProps {
   communities: Community[];
   currentUserId: string;
+  adminCommunityIds?: string[];
 }
+
+const noAdminCommunities: string[] = [];
 
 function messageFor(error: unknown): string {
   return error instanceof Error
@@ -41,7 +49,11 @@ function messageFor(error: unknown): string {
     : "The item could not be saved. Try again.";
 }
 
-export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
+export function ItemSection({
+  communities,
+  currentUserId,
+  adminCommunityIds = noAdminCommunities,
+}: ItemSectionProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
@@ -62,6 +74,9 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   const [inventoryCommunityId, setInventoryCommunityId] = useState("");
   const [loading, setLoading] = useState(true);
   const [pendingActions, setPendingActions] = useState<string[]>([]);
+  const [moderationReports, setModerationReports] = useState<
+    ModerationReport[]
+  >([]);
   const pendingActionsRef = useRef(new Set<string>());
 
   function announce(
@@ -165,7 +180,14 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     setConditionPhotoUrls(conditionUrls);
     setPhotoUrls(urls);
     setLoading(false);
-  }, [communities, inventoryCommunityId]);
+    if (communityId && adminCommunityIds.includes(communityId)) {
+      const reports = await supabase.rpc("list_moderation_reports", {
+        target_community_id: communityId,
+      });
+      if (reports.error) throw reports.error;
+      setModerationReports(reports.data as ModerationReport[]);
+    } else setModerationReports([]);
+  }, [adminCommunityIds, communities, inventoryCommunityId]);
 
   useEffect(() => {
     const loadItems = window.setTimeout(() => {
@@ -699,6 +721,93 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     return bookingContacts.find((contact) => contact.booking_id === bookingId);
   }
 
+  async function submitReport(
+    event: FormEvent<HTMLFormElement>,
+    target: "item" | "counterparty",
+    id: string,
+  ) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const action = `report-${target}-${id}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient().rpc(
+        target === "item" ? "submit_item_report" : "submit_counterparty_report",
+        {
+          [target === "item" ? "target_item_id" : "target_booking_id"]: id,
+          report_reason: String(form.get("reason")),
+          report_note: String(form.get("note") ?? "") || null,
+        },
+      );
+      if (result.error) throw result.error;
+      formElement.reset();
+      announce("Report submitted.");
+    } catch (error) {
+      announce(messageFor(error), { error: true });
+    } finally {
+      endAction(action);
+    }
+  }
+
+  async function moderate(report: ModerationReport, hide: boolean) {
+    const action = `moderate-${report.id}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient().rpc(
+        hide ? "hide_reported_item" : "handle_moderation_report",
+        { target_report_id: report.id },
+      );
+      if (result.error) throw result.error;
+      await refresh();
+      announce(
+        hide ? "Item hidden and report handled." : "Report marked as handled.",
+      );
+    } catch (error) {
+      announce(messageFor(error), { error: true });
+    } finally {
+      endAction(action);
+    }
+  }
+
+  function reportForm(
+    target: "item" | "counterparty",
+    id: string,
+    label: string,
+  ) {
+    const action = `report-${target}-${id}`;
+    return (
+      <details>
+        <summary>
+          {target === "item"
+            ? "Report item"
+            : "Report transaction counterparty"}
+        </summary>
+        <form
+          aria-label={`Report ${label}`}
+          aria-busy={isPending(action)}
+          onSubmit={(event) => void submitReport(event, target, id)}
+        >
+          <label htmlFor={`reason-${target}-${id}`}>Reason</label>
+          <select id={`reason-${target}-${id}`} name="reason" required>
+            {moderationReasons.map((reason) => (
+              <option key={reason.value} value={reason.value}>
+                {reason.label}
+              </option>
+            ))}
+          </select>
+          <label htmlFor={`note-${target}-${id}`}>
+            Additional note (optional, maximum 500 characters)
+          </label>
+          <textarea id={`note-${target}-${id}`} name="note" maxLength={500} />
+          <button type="submit" disabled={isPending(action)}>
+            Submit report
+          </button>
+        </form>
+      </details>
+    );
+  }
+
   return (
     <section className="card wide" aria-labelledby="items-title">
       <h2 id="items-title">Community inventory</h2>
@@ -768,6 +877,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   </p>
                   <p>Owner: {item.is_owned ? "You" : "Community member"}</p>
                   <p>Availability: {item.availability_summary}</p>
+                  {reportForm("item", item.id, item.name)}
                   {!item.is_owned && (
                     <form
                       aria-label={`Request ${item.name}`}
@@ -844,6 +954,11 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                     </span>
                   )}
                   {workflow(booking)}
+                  {reportForm(
+                    "counterparty",
+                    booking.id,
+                    `counterparty for ${booking.item_name}`,
+                  )}
                 </li>
               ))}
           </ul>
@@ -884,6 +999,12 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   )}
                   {(booking.is_item_owner || booking.is_borrower) &&
                     workflow(booking)}
+                  {(booking.is_item_owner || booking.is_borrower) &&
+                    reportForm(
+                      "counterparty",
+                      booking.id,
+                      `counterparty for ${booking.item_name}`,
+                    )}
                   {booking.status === "requested" && (
                     <div className="booking-actions">
                       <button
@@ -939,6 +1060,58 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           </ul>
         )}
       </section>
+      {adminCommunityIds.includes(selectedCommunityId) && (
+        <section
+          className="booking-requests"
+          aria-labelledby="moderation-title"
+        >
+          <h3 id="moderation-title">Moderation queue</h3>
+          {moderationReports.length === 0 ? (
+            <p>No reports in this community.</p>
+          ) : (
+            <ul>
+              {moderationReports.map((report) => (
+                <li key={report.id}>
+                  <strong>{report.target_label}</strong>
+                  <span>
+                    Status: {report.status === "open" ? "Open" : "Handled"}
+                  </span>
+                  <span>Reason: {moderationReasonLabel(report.reason)}</span>
+                  {report.note && <span>Note: {report.note}</span>}
+                  <span>
+                    Submitted:{" "}
+                    {new Date(report.created_at).toLocaleDateString()}
+                  </span>
+                  {report.action_taken && (
+                    <span>Action: {report.action_taken}</span>
+                  )}
+                  {report.status === "open" && (
+                    <div className="booking-actions">
+                      <button
+                        type="button"
+                        disabled={isPending(`moderate-${report.id}`)}
+                        onClick={() => void moderate(report, false)}
+                      >
+                        Mark handled
+                      </button>
+                      {report.target_type === "item" && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={isPending(`moderate-${report.id}`)}
+                          onClick={() => void moderate(report, true)}
+                        >
+                          Hide item
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       <h3 className="manage-title">List and manage your items</h3>
       {communities.length > 0 && (
         <form

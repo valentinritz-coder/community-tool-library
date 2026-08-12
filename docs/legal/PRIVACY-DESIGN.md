@@ -47,12 +47,22 @@ has no deletion scheduler, lifecycle worker, complete account-erasure flow, or l
 | Handover/return state | `bookings.status` values `checked_out` / `returned`; lifecycle RPCs | Record custody and make returned exchanges historical | Borrower and owner projection; no participant IDs. Active admin does not gain historical booking visibility solely from role. | Part of booking history; retained indefinitely in the current product pending the booking-history decision above. | **REQUIRES LEGAL REVIEW:** same unresolved transaction-history period and dispute requirements. |
 | Condition report UUID, booking UUID, phase, path, MIME type, author UUID, creation time | `condition_reports`; condition RPC/projection | Reserve and describe before/after condition evidence | Borrower, owner, and active same-community admin can read client-safe columns; `author_id` and MIME are withheld. Only participants create evidence in permitted phases. | Immutable and retained indefinitely with the booking today. `RESTRICT` references intentionally prevent accidental Auth/booking deletion, but no reviewed deletion/operator process exists. | **REQUIRES LEGAL REVIEW:** purpose, evidence period, administrator access, disputes, deletion and legal holds. |
 | Condition image and Storage metadata | private `condition-photos` bucket; temporary signed URL in UI | Evidence item condition around handover/return | Same read boundary as DB report; only the authoring participant uploads the exact reserved object. Signed URLs last 300 seconds (5 minutes) and are not persisted by the app. | Retained indefinitely; no user deletion, scheduled purge, or orphan cleanup. This is a public-pilot blocker until an evidence schedule/process is reviewed. | **REQUIRES LEGAL REVIEW:** retention duration, access, deletion, disputes and image-content guidance. |
+| Moderation report UUID, community, reporter UUID, item or booking-derived counterparty target, structured reason, optional note, status, timestamps, handling admin UUID and action | `moderation_reports`; submission and narrow admin RPCs | Let participants flag visible listings or a counterparty they encountered, and let the relevant community respond | Identifiers remain in the server-only table. Only active same-community admins receive the narrow queue (target label/item capability, reason, note, status/date/action); it omits reporter and counterparty UUIDs. Item reports require currently visible inventory. Counterparty reports accept only a booking UUID and derive the other participant server-side. Notes are untrusted text, trimmed and limited to 500 characters. | Retained with parent records indefinitely today; there is no deletion scheduler or reviewed retention period. Handled reports remain as a minimal operational trace. | **REQUIRES LEGAL REVIEW:** lawful basis/notice, administrator access, an appropriate retention period and deletion handling. |
 | Technical RLS proof UUID, owner UUID, short body | `rls_validation_notes` | Repository infrastructure validation only; not an MVP user flow | Only the authenticated row owner | The production-facing migration still creates this proof table; no UI writes it and no cleanup automation exists. Do not use it for pilot content. | Decide operationally whether to remove this technical proof before production; legal review only if it will contain real data. |
 
 The schema contains no display name, approximate area, address/pickup-location field, phone number,
-identity/residence document, moderation report, analytics event store, payment/deposit record, or
+identity/residence document, analytics event store, payment/deposit record, or
 insurance record. Those categories are therefore deliberately excluded from the inventory rather
 than documented as if collected.
+
+## Minimal moderation boundaries
+
+One open report per reporter and target is enforced with partial unique indexes, including under
+concurrent submissions; another report may be submitted after handling. Listing moderation uses an
+admin-only `moderation_hidden` state separate from owner-controlled archive/publication. Hidden items
+leave inventory browse and the normal photo-read boundary, and owners cannot clear that state.
+Counterparty reports create no member directory and expose no raw participant UUID. The pilot adds no
+ban, suspension, reputation, automated enforcement, appeal, or membership-removal workflow.
 
 ## Pilot retention operating rule
 

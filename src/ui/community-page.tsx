@@ -354,6 +354,14 @@ export function CommunityPage() {
             <ItemSection
               communities={state.communities}
               currentUserId={currentUserId}
+              adminCommunityIds={state.memberships
+                .filter(
+                  (membership) =>
+                    membership.user_id === currentUserId &&
+                    membership.role === "admin" &&
+                    membership.status === "active",
+                )
+                .map((membership) => membership.community_id)}
             />
             <button
               type="button"
