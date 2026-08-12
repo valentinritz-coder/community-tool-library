@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- private, short-lived signed Storage URLs cannot be statically optimized */
 
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Community } from "../domain/community";
 import {
@@ -55,10 +55,46 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   >({});
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [invalidFields, setInvalidFields] = useState<string[]>([]);
   const [paid, setPaid] = useState(false);
   const [search, setSearch] = useState("");
   const [inventoryCommunityId, setInventoryCommunityId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pendingActions, setPendingActions] = useState<string[]>([]);
+  const pendingActionsRef = useRef(new Set<string>());
+
+  function announce(
+    nextMessage: string,
+    options: { error?: boolean; fields?: string[] } = {},
+  ) {
+    setMessage(nextMessage);
+    setMessageIsError(options.error ?? false);
+    setInvalidFields(options.fields ?? []);
+  }
+
+  function fieldErrorProps(id: string) {
+    return invalidFields.includes(id)
+      ? { "aria-invalid": true as const, "aria-errormessage": "item-message" }
+      : {};
+  }
+
+  function beginAction(action: string): boolean {
+    if (pendingActionsRef.current.has(action)) return false;
+    pendingActionsRef.current.add(action);
+    setPendingActions([...pendingActionsRef.current]);
+    announce("Working…");
+    return true;
+  }
+
+  function endAction(action: string) {
+    pendingActionsRef.current.delete(action);
+    setPendingActions([...pendingActionsRef.current]);
+  }
+
+  function isPending(action: string): boolean {
+    return pendingActions.includes(action);
+  }
 
   const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -135,7 +171,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     const loadItems = window.setTimeout(() => {
       void refresh().catch((error: unknown) => {
         setLoading(false);
-        setMessage(messageFor(error));
+        announce(messageFor(error), { error: true });
       });
     }, 0);
     return () => window.clearTimeout(loadItems);
@@ -149,27 +185,40 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
 
   async function createItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    announce("");
     const form = new FormData(event.currentTarget);
+    const price = paid ? priceToCents(String(form.get("price") ?? "")) : null;
+    if (paid && price === null) {
+      announce("Enter a daily price between 0.01 and 1000.00.", {
+        error: true,
+        fields: ["item-price"],
+      });
+      return;
+    }
     const photo = form.get("photo");
     if (!(photo instanceof File) || photo.size === 0) {
-      setMessage("Choose one photo for the item.");
+      announce("Choose one photo for the item.", {
+        error: true,
+        fields: ["item-photo"],
+      });
       return;
     }
     const extension = photoExtension(photo);
     if (!extension) {
-      setMessage("Use a JPEG, PNG, or WebP photo.");
+      announce("Use a JPEG, PNG, or WebP photo.", {
+        error: true,
+        fields: ["item-photo"],
+      });
       return;
     }
     if (photo.size > 5 * 1024 * 1024) {
-      setMessage("The photo must be 5 MB or smaller.");
+      announce("The photo must be 5 MB or smaller.", {
+        error: true,
+        fields: ["item-photo"],
+      });
       return;
     }
-    const price = paid ? priceToCents(String(form.get("price") ?? "")) : null;
-    if (paid && price === null) {
-      setMessage("Enter a daily price between 0.01 and 1000.00.");
-      return;
-    }
+    if (!beginAction("create-item")) return;
     try {
       const supabase = getSupabaseBrowserClient();
       const created = await supabase.rpc("create_item", {
@@ -199,18 +248,23 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       await refresh();
       setMessage("Item listed for your community.");
     } catch (error) {
-      setMessage(messageFor(error));
+      announce(messageFor(error), { error: true });
+    } finally {
+      endAction("create-item");
     }
   }
 
   async function updateItem(event: FormEvent<HTMLFormElement>, item: Item) {
     event.preventDefault();
-    setMessage("");
+    announce("");
     const form = new FormData(event.currentTarget);
     const free = form.get("terms") === "free";
     const price = free ? null : priceToCents(String(form.get("price") ?? ""));
     if (!free && price === null) {
-      setMessage("Enter a daily price between 0.01 and 1000.00.");
+      announce("Enter a daily price between 0.01 and 1000.00.", {
+        error: true,
+        fields: [`price-${item.id}`],
+      });
       return;
     }
     const replacement = form.get("photo");
@@ -221,60 +275,73 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         !item.photo_path.endsWith(`.${extension}`) ||
         replacement.size > 5 * 1024 * 1024
       ) {
-        setMessage(
+        announce(
           "The replacement must use the same JPEG, PNG, or WebP format and be 5 MB or smaller.",
+          { error: true, fields: [`photo-${item.id}`] },
         );
         return;
       }
     }
-    const result = await getSupabaseBrowserClient()
-      .from("items")
-      .update({
-        name: String(form.get("name")),
-        category: String(form.get("category")),
-        description: String(form.get("description")),
-        is_free: free,
-        price_per_day_cents: price,
-      })
-      .eq("id", item.id);
-    if (result.error) setMessage(messageFor(result.error));
-    else {
-      if (replacement instanceof File && replacement.size > 0) {
-        const uploaded = await getSupabaseBrowserClient()
-          .storage.from("item-photos")
-          .upload(item.photo_path, replacement, {
-            contentType: replacement.type,
-            upsert: true,
-          });
-        if (uploaded.error) {
-          setMessage(messageFor(uploaded.error));
-          return;
-        }
-        if (!item.photo_uploaded) {
-          const published = await getSupabaseBrowserClient().rpc(
-            "publish_item",
-            { target_item_id: item.id },
-          );
-          if (published.error) {
-            setMessage(messageFor(published.error));
+    const action = `update-item-${item.id}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient()
+        .from("items")
+        .update({
+          name: String(form.get("name")),
+          category: String(form.get("category")),
+          description: String(form.get("description")),
+          is_free: free,
+          price_per_day_cents: price,
+        })
+        .eq("id", item.id);
+      if (result.error) announce(messageFor(result.error), { error: true });
+      else {
+        if (replacement instanceof File && replacement.size > 0) {
+          const uploaded = await getSupabaseBrowserClient()
+            .storage.from("item-photos")
+            .upload(item.photo_path, replacement, {
+              contentType: replacement.type,
+              upsert: true,
+            });
+          if (uploaded.error) {
+            announce(messageFor(uploaded.error), { error: true });
             return;
           }
+          if (!item.photo_uploaded) {
+            const published = await getSupabaseBrowserClient().rpc(
+              "publish_item",
+              { target_item_id: item.id },
+            );
+            if (published.error) {
+              announce(messageFor(published.error), { error: true });
+              return;
+            }
+          }
         }
+        await refresh();
+        setMessage("Item changes saved.");
       }
-      await refresh();
-      setMessage("Item changes saved.");
+    } finally {
+      endAction(action);
     }
   }
 
   async function archive(itemId: string) {
-    const result = await getSupabaseBrowserClient()
-      .from("items")
-      .update({ archived: true })
-      .eq("id", itemId);
-    if (result.error) setMessage(messageFor(result.error));
-    else {
-      await refresh();
-      setMessage("Item archived.");
+    const action = `archive-item-${itemId}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient()
+        .from("items")
+        .update({ archived: true })
+        .eq("id", itemId);
+      if (result.error) announce(messageFor(result.error), { error: true });
+      else {
+        await refresh();
+        setMessage("Item archived.");
+      }
+    } finally {
+      endAction(action);
     }
   }
 
@@ -284,45 +351,61 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   ) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    setMessage("");
+    announce("");
     const form = new FormData(formElement);
     const startDate = String(form.get("start_date") ?? "");
     const endDate = String(form.get("end_date") ?? "");
     const dateError = validateAvailabilityDates(startDate, endDate);
     if (dateError) {
-      setMessage(dateError);
-      return;
-    }
-    const result = await getSupabaseBrowserClient()
-      .from("availabilities")
-      .insert({
-        item_id: itemId,
-        start_date: startDate,
-        end_date: endDate,
+      announce(dateError, {
+        error: true,
+        fields: [`availability-start-${itemId}`, `availability-end-${itemId}`],
       });
-    if (result.error) {
-      setMessage(
-        result.error.message.includes("availability_ranges_do_not_overlap")
-          ? "This range overlaps an existing availability range."
-          : messageFor(result.error),
-      );
       return;
     }
-    formElement.reset();
-    await refresh();
-    setMessage("Availability range added.");
+    const action = `availability-add-${itemId}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient()
+        .from("availabilities")
+        .insert({
+          item_id: itemId,
+          start_date: startDate,
+          end_date: endDate,
+        });
+      if (result.error) {
+        setMessage(
+          result.error.message.includes("availability_ranges_do_not_overlap")
+            ? "This range overlaps an existing availability range."
+            : messageFor(result.error),
+        );
+        setMessageIsError(true);
+        return;
+      }
+      formElement.reset();
+      await refresh();
+      setMessage("Availability range added.");
+    } finally {
+      endAction(action);
+    }
   }
 
   async function removeAvailability(availabilityId: string) {
-    setMessage("");
-    const result = await getSupabaseBrowserClient()
-      .from("availabilities")
-      .delete()
-      .eq("id", availabilityId);
-    if (result.error) setMessage(messageFor(result.error));
-    else {
-      await refresh();
-      setMessage("Availability range removed.");
+    announce("");
+    const action = `availability-remove-${availabilityId}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient()
+        .from("availabilities")
+        .delete()
+        .eq("id", availabilityId);
+      if (result.error) announce(messageFor(result.error), { error: true });
+      else {
+        await refresh();
+        setMessage("Availability range removed.");
+      }
+    } finally {
+      endAction(action);
     }
   }
 
@@ -332,101 +415,124 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   ) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    setMessage("");
+    announce("");
     const form = new FormData(formElement);
     const startDate = String(form.get("start_date") ?? "");
     const endDate = String(form.get("end_date") ?? "");
     const dateError = validateBookingDates(startDate, endDate);
     if (dateError) {
-      setMessage(dateError);
+      announce(dateError, {
+        error: true,
+        fields: [`booking-start-${itemId}`, `booking-end-${itemId}`],
+      });
       return;
     }
-
-    const result = await getSupabaseBrowserClient().rpc("request_booking", {
-      target_item_id: itemId,
-      requested_start_date: startDate,
-      requested_end_date: endDate,
-    });
-    if (result.error) {
-      setMessage(
-        result.error.message.includes("not fully available")
-          ? "Those dates are not fully available. Choose dates covered by the owner's availability."
-          : messageFor(result.error),
-      );
-      return;
+    const action = `booking-request-${itemId}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient().rpc("request_booking", {
+        target_item_id: itemId,
+        requested_start_date: startDate,
+        requested_end_date: endDate,
+      });
+      if (result.error) {
+        setMessage(
+          result.error.message.includes("not fully available")
+            ? "Those dates are not fully available. Choose dates covered by the owner's availability."
+            : messageFor(result.error),
+        );
+        setMessageIsError(true);
+        return;
+      }
+      formElement.reset();
+      await refresh();
+      setMessage("Reservation request created with Requested status.");
+    } finally {
+      endAction(action);
     }
-    formElement.reset();
-    await refresh();
-    setMessage("Reservation request created with Requested status.");
   }
 
   async function decideBooking(
     booking: BookingRequest,
     decision: "accepted" | "refused",
   ) {
-    setMessage("");
-    const result = await getSupabaseBrowserClient().rpc("decide_booking", {
-      target_booking_id: booking.id,
-      decision,
-    });
-    if (result.error) {
-      const serverMessage = result.error.message;
-      if (serverMessage.includes("already been decided")) {
-        setMessage(
-          "This reservation request has already been decided. Refreshing its status.",
-        );
-      } else if (serverMessage.includes("conflict")) {
-        setMessage(
-          "These dates conflict with another accepted reservation. The request remains Requested.",
-        );
-      } else if (serverMessage.includes("no longer fully available")) {
-        setMessage(
-          "The item is no longer available for all of these dates. The request remains Requested.",
-        );
-      } else if (serverMessage.includes("no longer valid")) {
-        setMessage(
-          "This reservation request is no longer valid and could not be accepted.",
-        );
-      } else if (serverMessage.includes("Only the item owner")) {
-        setMessage(
-          "You are not authorized to decide this reservation request.",
-        );
-      } else {
-        setMessage(messageFor(result.error));
+    announce("");
+    const action = `booking-decision-${booking.id}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient().rpc("decide_booking", {
+        target_booking_id: booking.id,
+        decision,
+      });
+      if (result.error) {
+        const serverMessage = result.error.message;
+        if (serverMessage.includes("already been decided")) {
+          setMessage(
+            "This reservation request has already been decided. Refreshing its status.",
+          );
+        } else if (serverMessage.includes("conflict")) {
+          setMessage(
+            "These dates conflict with another accepted reservation. The request remains Requested.",
+          );
+        } else if (serverMessage.includes("no longer fully available")) {
+          setMessage(
+            "The item is no longer available for all of these dates. The request remains Requested.",
+          );
+        } else if (serverMessage.includes("no longer valid")) {
+          setMessage(
+            "This reservation request is no longer valid and could not be accepted.",
+          );
+        } else if (serverMessage.includes("Only the item owner")) {
+          setMessage(
+            "You are not authorized to decide this reservation request.",
+          );
+        } else {
+          announce(messageFor(result.error), { error: true });
+        }
+        setMessageIsError(true);
+        await refresh().catch(() => undefined);
+        return;
       }
-      await refresh().catch(() => undefined);
-      return;
+      await refresh();
+      setMessage(
+        decision === "accepted"
+          ? "Reservation accepted. The participants can now see each other's contact email."
+          : "Reservation refused.",
+      );
+    } finally {
+      endAction(action);
     }
-    await refresh();
-    setMessage(
-      decision === "accepted"
-        ? "Reservation accepted. The participants can now see each other's contact email."
-        : "Reservation refused.",
-    );
   }
 
   async function advanceBooking(booking: BookingRequest) {
-    setMessage("");
+    announce("");
     const handover = booking.status === "accepted";
-    const result = await getSupabaseBrowserClient().rpc(
-      handover ? "record_handover" : "record_return",
-      { target_booking_id: booking.id },
-    );
-    if (result.error) {
-      setMessage(
-        result.error.message.includes("required state")
-          ? "This transaction was already updated. Refreshing its status."
-          : messageFor(result.error),
+    const action = `booking-advance-${booking.id}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient().rpc(
+        handover ? "record_handover" : "record_return",
+        { target_booking_id: booking.id },
       );
-      await refresh().catch(() => undefined);
-      return;
+      if (result.error) {
+        setMessage(
+          result.error.message.includes("required state")
+            ? "This transaction was already updated. Refreshing its status."
+            : messageFor(result.error),
+        );
+        setMessageIsError(true);
+        await refresh().catch(() => undefined);
+        return;
+      }
+      await refresh();
+      setMessage(
+        handover
+          ? "Handover recorded. Status is now Checked out."
+          : "Return recorded. This transaction is now in your history.",
+      );
+    } finally {
+      endAction(action);
     }
-    await refresh();
-    setMessage(
-      handover
-        ? "Handover recorded. Status is now Checked out."
-        : "Return recorded. This transaction is now in your history.",
-    );
   }
 
   async function uploadCondition(
@@ -438,49 +544,73 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     const formElement = event.currentTarget;
     const photo = new FormData(formElement).get("condition_photo");
     if (!(photo instanceof File) || photo.size === 0) {
-      setMessage("Choose a condition photo.");
+      announce("Choose a condition photo.", {
+        error: true,
+        fields: [`condition-${phase}-${booking.id}`],
+      });
       return;
     }
     const extension = photoExtension(photo);
     if (!extension) {
-      setMessage("Use a JPEG, PNG, or WebP photo.");
+      announce("Use a JPEG, PNG, or WebP photo.", {
+        error: true,
+        fields: [`condition-${phase}-${booking.id}`],
+      });
       return;
     }
     if (photo.size > 5 * 1024 * 1024) {
-      setMessage("The photo must be 5 MB or smaller.");
-      return;
-    }
-    const supabase = getSupabaseBrowserClient();
-    const reserved = await supabase.rpc("create_condition_report", {
-      target_booking_id: booking.id,
-      report_phase: phase,
-      photo_extension: extension,
-    });
-    if (reserved.error) {
-      setMessage(messageFor(reserved.error));
-      await refresh().catch(() => undefined);
-      return;
-    }
-    const report = (reserved.data as ConditionReport[])[0];
-    if (!report) {
-      setMessage("The condition photo could not be prepared. Try again.");
-      return;
-    }
-    const uploaded = await supabase.storage
-      .from("condition-photos")
-      .upload(report.photo_path, photo, {
-        contentType: photo.type,
-        upsert: false,
+      announce("The photo must be 5 MB or smaller.", {
+        error: true,
+        fields: [`condition-${phase}-${booking.id}`],
       });
-    if (uploaded.error) {
-      setMessage("The condition photo could not be uploaded. Try again.");
       return;
     }
-    formElement.reset();
-    await refresh();
-    setMessage(
-      `${phase === "before" ? "Before" : "After"} condition photo added.`,
-    );
+    const action = `condition-${phase}-${booking.id}`;
+    if (!beginAction(action)) return;
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const reserved = await supabase.rpc("create_condition_report", {
+        target_booking_id: booking.id,
+        report_phase: phase,
+        photo_extension: extension,
+      });
+      if (reserved.error) {
+        announce(messageFor(reserved.error), {
+          error: true,
+          fields: [`condition-${phase}-${booking.id}`],
+        });
+        await refresh().catch(() => undefined);
+        return;
+      }
+      const report = (reserved.data as ConditionReport[])[0];
+      if (!report) {
+        announce("The condition photo could not be prepared. Try again.", {
+          error: true,
+          fields: [`condition-${phase}-${booking.id}`],
+        });
+        return;
+      }
+      const uploaded = await supabase.storage
+        .from("condition-photos")
+        .upload(report.photo_path, photo, {
+          contentType: photo.type,
+          upsert: false,
+        });
+      if (uploaded.error) {
+        announce("The condition photo could not be uploaded. Try again.", {
+          error: true,
+          fields: [`condition-${phase}-${booking.id}`],
+        });
+        return;
+      }
+      formElement.reset();
+      await refresh();
+      setMessage(
+        `${phase === "before" ? "Before" : "After"} condition photo added.`,
+      );
+    } finally {
+      endAction(action);
+    }
   }
 
   function workflow(booking: BookingRequest) {
@@ -519,6 +649,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         {phase && (
           <form
             aria-label={`Add ${phase} condition for ${booking.item_name}`}
+            aria-busy={isPending(`condition-${phase}-${booking.id}`)}
             onSubmit={(event) => void uploadCondition(event, booking, phase)}
           >
             <label htmlFor={`condition-${phase}-${booking.id}`}>
@@ -530,17 +661,33 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
               name="condition_photo"
               type="file"
               accept="image/jpeg,image/png,image/webp"
+              {...fieldErrorProps(`condition-${phase}-${booking.id}`)}
             />
-            <button type="submit">Add {phase} condition photo</button>
+            <button
+              type="submit"
+              disabled={isPending(`condition-${phase}-${booking.id}`)}
+            >
+              Add {phase} condition photo
+            </button>
           </form>
         )}
         {booking.status === "accepted" && (
-          <button type="button" onClick={() => void advanceBooking(booking)}>
+          <button
+            type="button"
+            aria-label={`Mark ${booking.item_name} as handed over`}
+            disabled={isPending(`booking-advance-${booking.id}`)}
+            onClick={() => void advanceBooking(booking)}
+          >
             Mark as handed over
           </button>
         )}
         {booking.status === "checked_out" && (
-          <button type="button" onClick={() => void advanceBooking(booking)}>
+          <button
+            type="button"
+            aria-label={`Mark ${booking.item_name} as returned`}
+            disabled={isPending(`booking-advance-${booking.id}`)}
+            onClick={() => void advanceBooking(booking)}
+          >
             Mark as returned
           </button>
         )}
@@ -555,7 +702,12 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   return (
     <section className="card wide" aria-labelledby="items-title">
       <h2 id="items-title">Community inventory</h2>
-      <p className="notice" role="status" aria-live="polite">
+      <p
+        id="item-message"
+        className="notice"
+        role={messageIsError ? "alert" : "status"}
+        aria-live={messageIsError ? "assertive" : "polite"}
+      >
         {message}
       </p>
       {communities.length === 0 ? (
@@ -584,12 +736,17 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
               placeholder="Item name or category"
             />
           </div>
+          <p className="visually-hidden" role="status" aria-live="polite">
+            {!loading &&
+              `${communityInventory.length} ${communityInventory.length === 1 ? "item" : "items"} shown.`}
+          </p>
           {loading ? (
             <p role="status">Loading community inventory…</p>
           ) : communityInventory.length > 0 ? (
-            <div className="item-list" aria-live="polite">
+            <div className="item-list">
               {communityInventory.map((item) => (
                 <article key={item.id} className="item-card">
+                  <h3>{item.name}</h3>
                   {photoUrls[item.id] ? (
                     <img
                       src={photoUrls[item.id]}
@@ -598,7 +755,6 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   ) : (
                     <p>Photo temporarily unavailable.</p>
                   )}
-                  <h3>{item.name}</h3>
                   <p className="item-category">
                     {itemCategoryLabel(item.category)}
                   </p>
@@ -615,6 +771,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   {!item.is_owned && (
                     <form
                       aria-label={`Request ${item.name}`}
+                      aria-busy={isPending(`booking-request-${item.id}`)}
                       onSubmit={(event) => void requestBooking(event, item.id)}
                     >
                       <label htmlFor={`booking-start-${item.id}`}>
@@ -625,6 +782,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         name="start_date"
                         type="date"
                         required
+                        {...fieldErrorProps(`booking-start-${item.id}`)}
                       />
                       <label htmlFor={`booking-end-${item.id}`}>End date</label>
                       <input
@@ -632,8 +790,14 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         name="end_date"
                         type="date"
                         required
+                        {...fieldErrorProps(`booking-end-${item.id}`)}
                       />
-                      <button type="submit">Request reservation</button>
+                      <button
+                        type="submit"
+                        disabled={isPending(`booking-request-${item.id}`)}
+                      >
+                        Request reservation
+                      </button>
                     </form>
                   )}
                 </article>
@@ -725,6 +889,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                       <button
                         type="button"
                         aria-label={`Accept reservation for ${booking.item_name}`}
+                        disabled={isPending(`booking-decision-${booking.id}`)}
                         onClick={() => void decideBooking(booking, "accepted")}
                       >
                         Accept
@@ -733,6 +898,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         type="button"
                         className="secondary"
                         aria-label={`Refuse reservation for ${booking.item_name}`}
+                        disabled={isPending(`booking-decision-${booking.id}`)}
                         onClick={() => void decideBooking(booking, "refused")}
                       >
                         Refuse
@@ -775,7 +941,10 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       </section>
       <h3 className="manage-title">List and manage your items</h3>
       {communities.length > 0 && (
-        <form onSubmit={(event) => void createItem(event)}>
+        <form
+          aria-busy={isPending("create-item")}
+          onSubmit={(event) => void createItem(event)}
+        >
           <label htmlFor="item-community">Community</label>
           <select id="item-community" name="community" required>
             {communities.map((community) => (
@@ -840,6 +1009,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                 inputMode="decimal"
                 placeholder="4.50"
                 required
+                {...fieldErrorProps("item-price")}
               />
             </>
           )}
@@ -852,20 +1022,23 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
             type="file"
             accept="image/jpeg,image/png,image/webp"
             required
+            {...fieldErrorProps("item-photo")}
           />
-          <button type="submit">List item</button>
+          <button type="submit" disabled={isPending("create-item")}>
+            List item
+          </button>
         </form>
       )}
       <div className="item-list">
         {ownItems.map((item) => (
           <article key={item.id} className="item-card">
-            {photoUrls[item.id] && (
-              <img src={photoUrls[item.id]} alt={`Photo of ${item.name}`} />
-            )}
             <h3>
               {item.name}
               {item.archived ? " — Archived" : ""}
             </h3>
+            {photoUrls[item.id] && (
+              <img src={photoUrls[item.id]} alt={`Photo of ${item.name}`} />
+            )}
             <p>{item.description}</p>
             <p>
               {item.is_free
@@ -891,6 +1064,9 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         <button
                           type="button"
                           className="secondary"
+                          disabled={isPending(
+                            `availability-remove-${range.id}`,
+                          )}
                           onClick={() => void removeAvailability(range.id)}
                           aria-label={`Remove ${availabilityLabel(range)}`}
                         >
@@ -900,7 +1076,10 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                     ))}
                 </ul>
               )}
-              <form onSubmit={(event) => void addAvailability(event, item.id)}>
+              <form
+                aria-busy={isPending(`availability-add-${item.id}`)}
+                onSubmit={(event) => void addAvailability(event, item.id)}
+              >
                 <label htmlFor={`availability-start-${item.id}`}>
                   Start date (included)
                 </label>
@@ -909,6 +1088,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   name="start_date"
                   type="date"
                   required
+                  {...fieldErrorProps(`availability-start-${item.id}`)}
                 />
                 <label htmlFor={`availability-end-${item.id}`}>
                   End date (included)
@@ -918,14 +1098,23 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   name="end_date"
                   type="date"
                   required
+                  {...fieldErrorProps(`availability-end-${item.id}`)}
                 />
-                <button type="submit">Add availability range</button>
+                <button
+                  type="submit"
+                  disabled={isPending(`availability-add-${item.id}`)}
+                >
+                  Add availability range
+                </button>
               </form>
             </section>
             {item.owner_id === currentUserId && (
               <details>
                 <summary>Edit item</summary>
-                <form onSubmit={(event) => void updateItem(event, item)}>
+                <form
+                  aria-busy={isPending(`update-item-${item.id}`)}
+                  onSubmit={(event) => void updateItem(event, item)}
+                >
                   <label htmlFor={`name-${item.id}`}>Item name</label>
                   <input
                     id={`name-${item.id}`}
@@ -987,6 +1176,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         ? ""
                         : (item.price_per_day_cents / 100).toFixed(2)
                     }
+                    {...fieldErrorProps(`price-${item.id}`)}
                   />
                   <label htmlFor={`photo-${item.id}`}>
                     Replace photo (optional; keep the same file format)
@@ -996,12 +1186,20 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                     name="photo"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    {...fieldErrorProps(`photo-${item.id}`)}
                   />
-                  <button type="submit">Save changes</button>
+                  <button
+                    type="submit"
+                    disabled={isPending(`update-item-${item.id}`)}
+                  >
+                    Save changes
+                  </button>
                   {!item.archived && (
                     <button
                       type="button"
                       className="secondary"
+                      aria-label={`Archive ${item.name}`}
+                      disabled={isPending(`archive-item-${item.id}`)}
                       onClick={() => void archive(item.id)}
                     >
                       Archive item

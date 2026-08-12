@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   canApproveMembership,
@@ -29,6 +29,30 @@ export function CommunityPage() {
   const [currentUserId, setCurrentUserId] = useState("");
   const [state, setState] = useState<CommunityState>(emptyState);
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [pendingActions, setPendingActions] = useState<string[]>([]);
+  const pendingActionsRef = useRef(new Set<string>());
+
+  function beginAction(action: string): boolean {
+    if (pendingActionsRef.current.has(action)) return false;
+    pendingActionsRef.current.add(action);
+    setPendingActions([...pendingActionsRef.current]);
+    return true;
+  }
+
+  function endAction(action: string) {
+    pendingActionsRef.current.delete(action);
+    setPendingActions([...pendingActionsRef.current]);
+  }
+
+  function isPending(action: string): boolean {
+    return pendingActions.includes(action);
+  }
+
+  function announce(nextMessage: string, isError = false) {
+    setMessage(nextMessage);
+    setMessageIsError(isError);
+  }
 
   async function refresh() {
     const supabase = getSupabaseBrowserClient();
@@ -54,7 +78,7 @@ export function CommunityPage() {
         setCurrentUserId(data.session?.user.id ?? "");
         if (signedIn) await refresh();
       } catch (error) {
-        setMessage(errorMessage(error));
+        announce(errorMessage(error), true);
       }
     }
 
@@ -69,7 +93,8 @@ export function CommunityPage() {
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    announce("");
+    if (!beginAction("authenticate")) return;
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
@@ -84,9 +109,11 @@ export function CommunityPage() {
       const { data } = await getSupabaseBrowserClient().auth.getUser();
       setCurrentUserId(data.user?.id ?? "");
       await refresh();
-      setMessage("Signed in successfully.");
+      announce("Signed in successfully.");
     } catch (error) {
-      setMessage(errorMessage(error));
+      announce(errorMessage(error), true);
+    } finally {
+      endAction("authenticate");
     }
   }
 
@@ -94,26 +121,32 @@ export function CommunityPage() {
     const form = document.querySelector<HTMLFormElement>("#sign-in-form");
     if (!form?.reportValidity()) return;
     const data = new FormData(form);
+    if (!beginAction("authenticate")) return;
     try {
       const { error } = await getSupabaseBrowserClient().auth.signUp({
         email: String(data.get("email") ?? "").trim(),
         password: String(data.get("password") ?? ""),
       });
       if (error) throw error;
-      setMessage(
+      announce(
         "Account created. Check your email if confirmation is required, then sign in.",
       );
     } catch (error) {
-      setMessage(errorMessage(error));
+      announce(errorMessage(error), true);
+    } finally {
+      endAction("authenticate");
     }
   }
 
   async function runRpc(
+    action: string,
     functionName: string,
     parameters: Record<string, string>,
     success: string,
   ) {
-    setMessage("");
+    announce("");
+    if (!beginAction(action)) return;
+    announce("Working…");
     try {
       const { error } = await getSupabaseBrowserClient().rpc(
         functionName,
@@ -121,9 +154,11 @@ export function CommunityPage() {
       );
       if (error) throw error;
       await refresh();
-      setMessage(success);
+      announce(success);
     } catch (error) {
-      setMessage(errorMessage(error));
+      announce(errorMessage(error), true);
+    } finally {
+      endAction(action);
     }
   }
 
@@ -148,13 +183,25 @@ export function CommunityPage() {
             Create a private community or request access with a join code.
           </p>
         </div>
-        <p className="notice" role="status" aria-live="polite">
+        <p
+          id="community-message"
+          className="notice"
+          role={messageIsError ? "alert" : "status"}
+          aria-live={messageIsError ? "assertive" : "polite"}
+        >
           {message}
         </p>
         {!authenticated ? (
           <section className="card" aria-labelledby="sign-in-title">
             <h2 id="sign-in-title">Sign in</h2>
-            <form id="sign-in-form" onSubmit={authenticate}>
+            <form
+              id="sign-in-form"
+              onSubmit={authenticate}
+              aria-describedby={
+                messageIsError ? "community-message" : undefined
+              }
+              aria-busy={isPending("authenticate")}
+            >
               <label htmlFor="email">Email address</label>
               <input
                 id="email"
@@ -173,10 +220,13 @@ export function CommunityPage() {
                 required
               />
               <div className="actions">
-                <button type="submit">Sign in</button>
+                <button type="submit" disabled={isPending("authenticate")}>
+                  Sign in
+                </button>
                 <button
                   type="button"
                   className="secondary"
+                  disabled={isPending("authenticate")}
                   onClick={() => void createAccount()}
                 >
                   Create account
@@ -189,12 +239,14 @@ export function CommunityPage() {
             <section className="card" aria-labelledby="create-title">
               <h2 id="create-title">Create a community</h2>
               <form
+                aria-busy={isPending("create-community")}
                 onSubmit={(event) => {
                   event.preventDefault();
                   const name = String(
                     new FormData(event.currentTarget).get("name") ?? "",
                   );
                   void runRpc(
+                    "create-community",
                     "create_community",
                     { community_name: name },
                     "Community created. You are its admin.",
@@ -209,19 +261,23 @@ export function CommunityPage() {
                   maxLength={80}
                   required
                 />
-                <button type="submit">Create community</button>
+                <button type="submit" disabled={isPending("create-community")}>
+                  Create community
+                </button>
               </form>
             </section>
             <section className="card" aria-labelledby="join-title">
               <h2 id="join-title">Request to join</h2>
               <p>An admin must approve your request.</p>
               <form
+                aria-busy={isPending("join-community")}
                 onSubmit={(event) => {
                   event.preventDefault();
                   const code = String(
                     new FormData(event.currentTarget).get("code") ?? "",
                   );
                   void runRpc(
+                    "join-community",
                     "request_to_join_community",
                     { requested_join_code: code },
                     "Request sent. An admin must approve it.",
@@ -230,7 +286,9 @@ export function CommunityPage() {
               >
                 <label htmlFor="join-code">Community join code</label>
                 <input id="join-code" name="code" inputMode="text" required />
-                <button type="submit">Request to join</button>
+                <button type="submit" disabled={isPending("join-community")}>
+                  Request to join
+                </button>
               </form>
             </section>
             <section className="card wide" aria-labelledby="communities-title">
@@ -270,8 +328,12 @@ export function CommunityPage() {
                       ) && (
                         <button
                           type="button"
+                          disabled={isPending(
+                            `approve-${membership.community_id}-${membership.user_id}`,
+                          )}
                           onClick={() =>
                             void runRpc(
+                              `approve-${membership.community_id}-${membership.user_id}`,
                               "approve_membership",
                               {
                                 target_community_id: membership.community_id,

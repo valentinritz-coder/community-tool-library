@@ -7,6 +7,7 @@ const query = {
   select: vi.fn(() => query),
   order: vi.fn().mockResolvedValue({ data: [], error: null }),
   insert: vi.fn().mockResolvedValue({ error: null }),
+  update: vi.fn(() => query),
   delete: vi.fn(() => query),
   eq: vi.fn().mockResolvedValue({ error: null }),
 };
@@ -65,6 +66,100 @@ describe("ItemSection", () => {
     ).toBeInTheDocument();
   });
 
+  it("associates a new-item price error with its field", async () => {
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="member-a"
+      />,
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Price per day" }));
+    const price = document.getElementById("item-price") as HTMLInputElement;
+    expect(price).toBeInstanceOf(HTMLInputElement);
+    fireEvent.change(price, { target: { value: "invalid" } });
+    Object.defineProperty(screen.getByLabelText(/Item photo/), "files", {
+      configurable: true,
+      value: [new File(["photo"], "photo.jpg", { type: "image/jpeg" })],
+    });
+    const form = price.closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Enter a daily price between 0.01 and 1000.00.",
+    );
+    const invalidPrice = document.getElementById("item-price");
+    expect(invalidPrice).toHaveAttribute("aria-invalid", "true");
+    expect(invalidPrice).toHaveAttribute("aria-errormessage", "item-message");
+  });
+
+  it("associates edit price and replacement-photo errors with their fields", async () => {
+    query.order
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "item-a",
+            community_id: "community-a",
+            owner_id: "member-a",
+            name: "Drill",
+            category: "small_diy",
+            description: "Small drill",
+            photo_path: "item-a/photo.jpg",
+            is_free: false,
+            price_per_day_cents: 100,
+            archived: false,
+            photo_uploaded: true,
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: [], error: null });
+    render(
+      <ItemSection
+        communities={[
+          { id: "community-a", name: "Riverside", join_code: "join-code" },
+        ]}
+        currentUserId="member-a"
+      />,
+    );
+    fireEvent.click(await screen.findByText("Edit item"));
+    const editForm = screen
+      .getByLabelText("Price per day (leave blank for free)")
+      .closest("form");
+    expect(editForm).not.toBeNull();
+    const price = screen.getByLabelText("Price per day (leave blank for free)");
+    fireEvent.change(price, { target: { value: "invalid" } });
+    fireEvent.submit(editForm!);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Enter a daily price between 0.01 and 1000.00.",
+    );
+    expect(price).toHaveAttribute("aria-errormessage", "item-message");
+
+    fireEvent.change(price, { target: { value: "1.00" } });
+    const replacement = screen.getByLabelText(/Replace photo/);
+    const invalidPhoto = new File(["photo"], "photo.gif", {
+      type: "image/gif",
+    });
+    const NativeFormData = FormData;
+    vi.stubGlobal(
+      "FormData",
+      class extends NativeFormData {
+        override get(name: string) {
+          return name === "photo" ? invalidPhoto : super.get(name);
+        }
+      },
+    );
+    fireEvent.submit(editForm!);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The replacement must use the same JPEG, PNG, or WebP format and be 5 MB or smaller.",
+    );
+    expect(replacement).toHaveAttribute("aria-invalid", "true");
+    expect(replacement).toHaveAttribute("aria-errormessage", "item-message");
+    vi.unstubAllGlobals();
+  });
+
   it("shows searchable inventory details and a clear no-result state", async () => {
     rpc.mockResolvedValueOnce({
       data: [
@@ -97,6 +192,7 @@ describe("ItemSection", () => {
     expect(
       await screen.findByRole("heading", { name: "Cordless screwdriver" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("1 item shown.")).toHaveAttribute("role", "status");
     expect(
       screen.getByText("Small, low-risk DIY", { selector: "p" }),
     ).toBeInTheDocument();
@@ -165,11 +261,11 @@ describe("ItemSection", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Add availability range" }),
     );
-    expect(
-      await screen.findByText(
-        "The end date must be on or after the start date.",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The end date must be on or after the start date.",
+    );
+    expect(start).toHaveAttribute("aria-invalid", "true");
+    expect(end).toHaveAttribute("aria-errormessage", "item-message");
     expect(query.insert).not.toHaveBeenCalled();
 
     fireEvent.change(end, { target: { value: "2026-08-15" } });
@@ -613,13 +709,15 @@ describe("ItemSection", () => {
       />,
     );
     fireEvent.click(
-      await screen.findByRole("button", { name: "Mark as handed over" }),
+      await screen.findByRole("button", { name: "Mark Drill as handed over" }),
     );
     expect(await screen.findByText("Status: Checked out")).toBeInTheDocument();
     expect(rpc).toHaveBeenCalledWith("record_handover", {
       target_booking_id: "booking-a",
     });
-    fireEvent.click(screen.getByRole("button", { name: "Mark as returned" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark Drill as returned" }),
+    );
     expect(
       await screen.findByRole("heading", {
         name: "Returned transaction history",
