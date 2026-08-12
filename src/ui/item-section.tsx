@@ -46,7 +46,9 @@ const noAdminCommunities: string[] = [];
 function messageFor(error: unknown): string {
   return error instanceof Error
     ? error.message
-    : "The item could not be saved. Try again.";
+    : typeof error === "object" && error !== null && "message" in error
+      ? String(error.message)
+      : "The action could not be completed. Try again.";
 }
 
 export function ItemSection({

@@ -71,7 +71,9 @@ begin
     auth.uid(), report_reason, normalized_note
   from public.bookings b join public.items i on i.id = b.item_id
   where b.id = target_booking_id and (b.borrower_id = auth.uid() or i.owner_id = auth.uid())
-    and b.borrower_id <> i.owner_id;
+    and b.borrower_id <> i.owner_id
+    and public.is_active_community_member(i.community_id)
+  returning id into report_id;
   if report_id is null then raise exception 'Only a booking participant can report its counterparty' using errcode = '42501'; end if;
   return report_id;
 exception when unique_violation then raise exception 'An open report already exists for this target' using errcode = '23505';
@@ -95,29 +97,36 @@ end; $$;
 
 create function public.handle_moderation_report(target_report_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
-declare report_community uuid;
 begin
-  select community_id into report_community from public.moderation_reports where id = target_report_id;
-  if report_community is null or not public.is_active_community_admin(report_community) then
+  update public.moderation_reports set status = 'handled', handled_at = now(), handled_by = auth.uid(), action_taken = 'reviewed'
+  where id = target_report_id and status = 'open'
+    and public.is_active_community_admin(community_id);
+  if not found then
+    if exists (select 1 from public.moderation_reports where id = target_report_id and status = 'handled'
+      and public.is_active_community_admin(community_id)) then
+      raise exception 'Report is already handled' using errcode = '22023';
+    end if;
     raise exception 'Active same-community admin required' using errcode = '42501';
   end if;
-  update public.moderation_reports set status = 'handled', handled_at = now(), handled_by = auth.uid(), action_taken = 'reviewed'
-  where id = target_report_id and status = 'open';
-  if not found then raise exception 'Report is already handled' using errcode = '22023'; end if;
 end; $$;
 
 create function public.hide_reported_item(target_report_id uuid)
 returns void language plpgsql security definer set search_path = '' as $$
-declare report_item uuid; report_community uuid;
+declare report_item uuid;
 begin
-  select item_id, community_id into report_item, report_community from public.moderation_reports
-  where id = target_report_id and target_type = 'item';
-  if report_item is null or not public.is_active_community_admin(report_community) then
-    raise exception 'Active same-community admin and item report required' using errcode = '42501';
+  update public.moderation_reports
+  set status = 'handled', handled_at = now(), handled_by = auth.uid(), action_taken = 'item hidden'
+  where id = target_report_id and target_type = 'item' and status = 'open'
+    and public.is_active_community_admin(community_id)
+  returning item_id into report_item;
+  if report_item is null then
+    if exists (select 1 from public.moderation_reports where id = target_report_id
+      and target_type = 'item' and status = 'handled' and public.is_active_community_admin(community_id)) then
+      raise exception 'Report is already handled' using errcode = '22023';
+    end if;
+    raise exception 'Active same-community admin and open item report required' using errcode = '42501';
   end if;
   update public.items set moderation_hidden = true where id = report_item;
-  update public.moderation_reports set status = 'handled', handled_at = coalesce(handled_at, now()),
-    handled_by = coalesce(handled_by, auth.uid()), action_taken = 'item hidden' where id = target_report_id;
 end; $$;
 
 revoke all on function public.submit_item_report(uuid, public.moderation_reason, text), public.submit_counterparty_report(uuid, public.moderation_reason, text), public.list_moderation_reports(uuid), public.handle_moderation_report(uuid), public.hide_reported_item(uuid) from public;
