@@ -1,6 +1,6 @@
 begin;
 
-select plan(30);
+select plan(32);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password) values
   ('a0000000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner@example.test', ''),
@@ -36,6 +36,8 @@ select is((select count(*) from public.list_booking_requests() where status = 'r
 select is((select count(*) from public.list_booking_requests() where status = 'accepted'), 1::bigint, 'borrower sees accepted status');
 select is((select count(*) from public.list_booking_requests() where status = 'refused'), 1::bigint, 'borrower sees refused status');
 select ok((select bool_and(not can_decide) from public.list_booking_requests()), 'borrower gets no decision capability');
+select throws_ok($$select borrower_id from public.list_booking_requests()$$, '42703', 'column "borrower_id" does not exist', 'booking projection excludes borrower UUID');
+select throws_ok($$select owner_id from public.list_booking_requests()$$, '42703', 'column "owner_id" does not exist', 'booking projection excludes owner UUID');
 select is((select counterparty_email from public.list_accepted_booking_contacts()), 'owner@example.test', 'accepted borrower sees only owner email');
 select is((select count(*) from public.list_accepted_booking_contacts()), 1::bigint, 'requested and refused bookings expose no borrower contact rows');
 

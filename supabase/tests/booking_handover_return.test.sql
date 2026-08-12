@@ -30,8 +30,10 @@ insert into public.bookings(id,item_id,borrower_id,start_date,end_date,status) v
 set local role authenticated;
 select set_config('request.jwt.claim.sub','b0000000-0000-4000-8000-000000000002',true);
 select is((select status::text from public.record_handover('b3000000-0000-4000-8000-000000000001')),'checked_out','borrower records handover');
+select is((select count(*) from public.list_accepted_booking_contacts() where booking_id='b3000000-0000-4000-8000-000000000001'),0::bigint,'handover immediately removes participant contact from the accepted-only projection');
 select throws_ok($$select * from public.record_handover('b3000000-0000-4000-8000-000000000001')$$,'55000','Booking is not in the required state','repeated handover is rejected');
 select is((select status::text from public.record_return('b3000000-0000-4000-8000-000000000001')),'returned','borrower records return');
+select is((select count(*) from public.list_accepted_booking_contacts() where booking_id='b3000000-0000-4000-8000-000000000001'),0::bigint,'returned history does not re-expose participant contact');
 select throws_ok($$select * from public.record_return('b3000000-0000-4000-8000-000000000001')$$,'55000','Booking is not in the required state','repeated return is rejected');
 select throws_ok($$select * from public.record_handover('b3000000-0000-4000-8000-000000000003')$$,'55000','Booking is not in the required state','requested to checked out is rejected');
 select throws_ok($$select * from public.record_return('b3000000-0000-4000-8000-000000000003')$$,'55000','Booking is not in the required state','requested to returned is rejected');

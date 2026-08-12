@@ -961,7 +961,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
             maxLength={80}
             required
           />
-          <label htmlFor="item-category">Safe category</label>
+          <label htmlFor="item-category">Item category</label>
           <select id="item-category" name="category" required>
             {itemCategories.map((category) => (
               <option key={category.value} value={category.value}>
@@ -1122,7 +1122,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                     defaultValue={item.name}
                     required
                   />
-                  <label htmlFor={`category-${item.id}`}>Safe category</label>
+                  <label htmlFor={`category-${item.id}`}>Item category</label>
                   <select
                     id={`category-${item.id}`}
                     name="category"
