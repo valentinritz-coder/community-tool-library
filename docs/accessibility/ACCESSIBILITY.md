@@ -24,17 +24,25 @@ Accessibility is a first-class MVP requirement because the service may be used b
 - zoom/reflow must not break core workflows;
 - dates and reservation states must be understandable without interpreting a dense calendar grid.
 
-## Core flows to test manually
+## Manual keyboard and screen-reader gate
 
-At minimum, test these flows using keyboard-only navigation and a screen reader before pilot release:
+Issue #28 is not completely validated until a human tester runs this checklist with keyboard-only
+navigation and a real screen reader in the browser/assistive-technology combinations supported for
+the pilot. Record the environment, scenarios, findings, and fixes when that review is performed.
 
-1. sign in / join a community;
-2. browse/search items;
-3. open item details;
-4. request a reservation;
-5. accept/refuse a request;
-6. add an item;
-7. mark handover/return.
+- [ ] Sign in and create an account: reach every field/action, perceive validation and async results.
+- [ ] Create and join a community: perceive progress/results and approve a membership without duplicate actions.
+- [ ] Browse and search inventory: follow heading/result reading order and perceive result-count changes.
+- [ ] List, edit, and archive an item: operate all controls and perceive field-specific errors and progress.
+- [ ] Add/remove availability: operate dates/actions and perceive date errors, progress, and results.
+- [ ] Request a booking: operate dates/action and perceive validation, progress, and resulting status.
+- [ ] Accept/refuse a request: identify each contextual action and perceive progress and resulting status.
+- [ ] Record handover/return: identify each contextual action and perceive progress and resulting status.
+- [ ] Upload/review condition evidence: operate file controls and perceive errors, upload progress, and image alternatives.
+
+For every scenario, also check logical focus order, visible focus, absence of traps, focus after DOM
+updates, accessible names/states, and mobile zoom/reflow. Automated DOM tests complement but do not
+replace this gate.
 
 ## Older / low-confidence user testing
 
@@ -69,6 +77,7 @@ required attributes, disclosure widgets, and visible focus treatment remain the 
 screen-reader operation rather than custom ARIA widgets.
 
 This was a focused code/DOM review and automated regression pass, not WCAG certification and not a
-substitute for testing with disabled pilot users. Before pilot release, complete the keyboard and
-screen-reader scenarios above in supported browser/assistive-technology combinations, including file
-selection and native date controls, and verify zoom/reflow on representative mobile devices.
+substitute for testing with disabled pilot users. This environment did not provide a real screen
+reader, so no manual screen-reader result is claimed. Before considering issue #28 completely
+validated, complete and record the checklist above, including file selection and native date controls,
+and verify zoom/reflow on representative mobile devices.
