@@ -4,7 +4,7 @@ export interface BookingRequest {
   item_name: string;
   start_date: string;
   end_date: string;
-  status: "requested" | "accepted" | "refused";
+  status: "requested" | "accepted" | "refused" | "checked_out" | "returned";
   is_borrower: boolean;
   is_item_owner: boolean;
   can_decide: boolean;
@@ -20,7 +20,19 @@ export const bookingStatusLabel: Record<BookingRequest["status"], string> = {
   requested: "Requested",
   accepted: "Accepted",
   refused: "Refused",
+  checked_out: "Checked out",
+  returned: "Returned",
 };
+
+export type ConditionPhase = "before" | "after";
+
+export interface ConditionReport {
+  id: string;
+  booking_id: string;
+  phase: ConditionPhase;
+  photo_path: string;
+  created_at: string;
+}
 
 export function validateBookingDates(
   startDate: string,
