@@ -40,6 +40,182 @@ describe("ItemSection", () => {
     rpc.mockResolvedValue({ data: [], error: null });
   });
 
+  const community = {
+    id: "community-a",
+    name: "Riverside",
+    join_code: "join-code",
+  };
+
+  function inventoryRpc() {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data:
+          name === "browse_community_inventory"
+            ? [
+                {
+                  id: "item-a",
+                  community_id: "community-a",
+                  name: "Cordless drill",
+                  category: "small_diy",
+                  description: "Compact drill",
+                  photo_path: "item-a/photo.jpg",
+                  is_free: true,
+                  price_per_day_cents: null,
+                  is_owned: false,
+                  availability_summary: "Available tomorrow",
+                },
+              ]
+            : [],
+        error: null,
+      }),
+    );
+  }
+
+  it("submits the labelled item report reason and note and announces success", async () => {
+    inventoryRpc();
+    render(<ItemSection communities={[community]} currentUserId="member-a" />);
+    fireEvent.click(await screen.findByText("Report item"));
+    expect(screen.getByLabelText("Reason")).toBeRequired();
+    expect(screen.getByLabelText(/Additional note/)).toHaveAttribute(
+      "maxlength",
+      "500",
+    );
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "unsafe" },
+    });
+    fireEvent.change(screen.getByLabelText(/Additional note/), {
+      target: { value: "Loose guard" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit report" }));
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("submit_item_report", {
+        target_item_id: "item-a",
+        report_reason: "unsafe",
+        report_note: "Loose guard",
+      }),
+    );
+    expect(await screen.findByText("Report submitted.")).toHaveAttribute(
+      "role",
+      "status",
+    );
+  });
+
+  it("announces report errors and prevents a duplicate submit while pending", async () => {
+    let finish:
+      | ((value: { data: null; error: { message: string } }) => void)
+      | undefined;
+    inventoryRpc();
+    render(<ItemSection communities={[community]} currentUserId="member-a" />);
+    fireEvent.click(await screen.findByText("Report item"));
+    rpc.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const submit = screen.getByRole("button", { name: "Submit report" });
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+    expect(submit).toBeDisabled();
+    expect(
+      rpc.mock.calls.filter(([name]) => name === "submit_item_report"),
+    ).toHaveLength(1);
+    finish?.({ data: null, error: { message: "Open report already exists" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Open report already exists",
+    );
+  });
+
+  it("shows moderation statuses and sends handled and item-hide actions", async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data:
+          name === "list_moderation_reports"
+            ? [
+                {
+                  id: "report-item",
+                  target_type: "item",
+                  target_label: "Drill",
+                  item_id: "item-a",
+                  reason: "unsafe",
+                  note: null,
+                  status: "open",
+                  created_at: "2026-08-12T00:00:00Z",
+                  action_taken: null,
+                },
+                {
+                  id: "report-user",
+                  target_type: "counterparty",
+                  target_label: "Transaction counterparty",
+                  item_id: null,
+                  reason: "other",
+                  note: null,
+                  status: "handled",
+                  created_at: "2026-08-11T00:00:00Z",
+                  action_taken: "reviewed",
+                },
+              ]
+            : [],
+        error: null,
+      }),
+    );
+    render(
+      <ItemSection
+        communities={[community]}
+        currentUserId="admin-a"
+        adminCommunityIds={["community-a"]}
+      />,
+    );
+    expect(await screen.findByText("Status: Open")).toBeInTheDocument();
+    expect(screen.getByText("Status: Handled")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Hide item" })).toHaveLength(
+      1,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Mark handled" }));
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("handle_moderation_report", {
+        target_report_id: "report-item",
+      }),
+    );
+  });
+
+  it("hides an item through the report-scoped moderation RPC", async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data:
+          name === "list_moderation_reports"
+            ? [
+                {
+                  id: "report-item",
+                  target_type: "item",
+                  target_label: "Drill",
+                  item_id: "item-a",
+                  reason: "unsafe",
+                  note: null,
+                  status: "open",
+                  created_at: "2026-08-12T00:00:00Z",
+                  action_taken: null,
+                },
+              ]
+            : [],
+        error: null,
+      }),
+    );
+    render(
+      <ItemSection
+        communities={[community]}
+        currentUserId="admin-a"
+        adminCommunityIds={["community-a"]}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Hide item" }));
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("hide_reported_item", {
+        target_report_id: "report-item",
+      }),
+    );
+  });
+
   it("offers a labelled, low-risk mobile item form", () => {
     render(
       <ItemSection
