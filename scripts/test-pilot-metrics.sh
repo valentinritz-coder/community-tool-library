@@ -11,6 +11,7 @@ if psql "$database_url" -X --set=ON_ERROR_STOP=1 --csv \
   echo "pilot-metrics.sql unexpectedly accepted missing parameters" >&2
   exit 1
 fi
+grep -Fxq "community_id is required" "$output"
 
 psql "$database_url" -X --set=ON_ERROR_STOP=1 --csv \
   --set=community_id="$community_id" \

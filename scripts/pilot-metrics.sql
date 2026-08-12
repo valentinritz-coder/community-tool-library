@@ -1,14 +1,17 @@
 \if :{?community_id}
 \else
-  \error 'community_id is required'
+  \echo 'community_id is required'
+  \quit 3
 \endif
 \if :{?window_start}
 \else
-  \error 'window_start is required'
+  \echo 'window_start is required'
+  \quit 3
 \endif
 \if :{?window_end}
 \else
-  \error 'window_end is required'
+  \echo 'window_end is required'
+  \quit 3
 \endif
 
 with scoped_items as (
