@@ -52,7 +52,7 @@ describe("ItemSection", () => {
 
     expect(screen.getAllByLabelText("Community")).toHaveLength(2);
     expect(screen.getByLabelText("Item name")).toBeRequired();
-    expect(screen.getByLabelText("Safe category")).toHaveTextContent(
+    expect(screen.getByLabelText("Item category")).toHaveTextContent(
       "Small, low-risk DIY",
     );
     expect(screen.queryByRole("option", { name: /chainsaw/i })).toBeNull();

@@ -1,6 +1,6 @@
 begin;
 
-select plan(30);
+select plan(34);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password) values
   ('a0000000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner@example.test', ''),
@@ -36,6 +36,8 @@ select is((select count(*) from public.list_booking_requests() where status = 'r
 select is((select count(*) from public.list_booking_requests() where status = 'accepted'), 1::bigint, 'borrower sees accepted status');
 select is((select count(*) from public.list_booking_requests() where status = 'refused'), 1::bigint, 'borrower sees refused status');
 select ok((select bool_and(not can_decide) from public.list_booking_requests()), 'borrower gets no decision capability');
+select throws_ok($$select borrower_id from public.list_booking_requests()$$, '42703', 'column "borrower_id" does not exist', 'booking projection excludes borrower UUID');
+select throws_ok($$select owner_id from public.list_booking_requests()$$, '42703', 'column "owner_id" does not exist', 'booking projection excludes owner UUID');
 select is((select counterparty_email from public.list_accepted_booking_contacts()), 'owner@example.test', 'accepted borrower sees only owner email');
 select is((select count(*) from public.list_accepted_booking_contacts()), 1::bigint, 'requested and refused bookings expose no borrower contact rows');
 
@@ -50,6 +52,17 @@ select throws_ok($$select borrower_id from public.list_accepted_booking_contacts
 select throws_ok($$select owner_id from public.list_accepted_booking_contacts()$$, '42703', 'column "owner_id" does not exist', 'contact projection excludes owner UUID');
 select throws_ok($$select phone from public.list_accepted_booking_contacts()$$, '42703', 'column "phone" does not exist', 'contact projection has no phone field');
 select throws_ok($$select address from public.list_accepted_booking_contacts()$$, '42703', 'column "address" does not exist', 'contact projection has no address field');
+
+reset role;
+update public.memberships
+set status = 'pending'
+where community_id = 'a1000000-0000-4000-8000-000000000001'
+  and user_id = 'a0000000-0000-4000-8000-000000000002';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-000000000002', true);
+select is((select count(*) from public.list_accepted_booking_contacts()), 0::bigint, 'inactive borrower loses contact access while booking remains accepted');
+select set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-000000000001', true);
+select is((select counterparty_email from public.list_accepted_booking_contacts()), 'borrower@example.test', 'active owner retains contact access when accepted borrower becomes inactive');
 
 select set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-000000000004', true);
 select is((select count(*) from public.list_booking_requests()), 1::bigint, 'non-participant admin sees only requested bookings');
