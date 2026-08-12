@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install --yes postgresql-client
+
       - name: Start local Supabase
         run: npm run supabase:start
 
@@ -35,6 +38,15 @@ jobs:
 
       - name: Test concurrent booking lifecycle transitions
         run: npm run test:db-concurrency
+
+      - name: Reset before isolated demo validation
+        run: npm run supabase:reset
+
+      - name: Load and verify local synthetic demo
+        run: npm run demo:local
+
+      - name: Test pilot metrics SQL
+        run: npm run metrics:test
 
       - name: Lint
         run: npm run lint

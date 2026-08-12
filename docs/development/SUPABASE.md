@@ -32,6 +32,10 @@ schema is reproducible. Create later migrations with `npm run supabase -- migrat
 never edit an already-shared migration. Inspect local services with `npm run supabase:status` and
 stop them with `npm run supabase:stop`.
 
+For the optional, explicitly local synthetic demonstration dataset, follow
+[`docs/operations/DEPLOYMENT-RUNBOOK.md`](../operations/DEPLOYMENT-RUNBOOK.md#local-synthetic-demo-never-production).
+It is intentionally separate from the normal seed/reset path and must never be loaded into production.
+
 ## Authorization tests
 
 `npm run supabase:test` runs pgTAP inside the local database. The tests switch to the actual

@@ -72,6 +72,13 @@ a local Supabase proof of concept; see
 [`docs/development/SUPABASE.md`](docs/development/SUPABASE.md) for its prerequisites, environment
 variables, migration workflow and security tests. Never commit secrets.
 
+Pilot operators should use the
+[`deployment runbook`](docs/operations/DEPLOYMENT-RUNBOOK.md),
+[`minimal metric definitions`](docs/operations/PILOT-METRICS.md), and
+[`launch readiness checklist`](docs/operations/PILOT-READINESS-CHECKLIST.md). These documents retain
+the unresolved manual accessibility and external legal gates; they do not assert that a public pilot
+is currently ready.
+
 The source tree separates concerns as follows:
 
 - `src/app`: Next.js routes and global styling;
