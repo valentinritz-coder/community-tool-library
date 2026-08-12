@@ -30,6 +30,9 @@ jobs:
       - name: Reapply Supabase migrations
         run: npm run supabase:reset
 
+      - name: Load and verify local synthetic demo
+        run: npm run demo:local
+
       - name: Test Supabase authorization
         run: npm run supabase:test
 
