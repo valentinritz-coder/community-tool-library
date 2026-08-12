@@ -7,8 +7,9 @@
 ## Product-owned factual copy
 
 - [x] Explain that community inventory is visible only to active community members.
-- [x] Explain that borrower and owner see each other’s email only for an accepted booking while both
-      remain eligible; administrators do not receive it merely because they are administrators.
+- [x] Explain that borrower and owner see each other’s email only for an accepted booking while the
+      caller remains an active community member; administrators do not receive it merely because they
+      are administrators.
 - [x] Explain that participant/admin access to condition evidence is limited by product role and that
       images use private Storage with temporary links.
 - [x] State factually that the service displays free/price-per-day terms but does not collect, hold,
