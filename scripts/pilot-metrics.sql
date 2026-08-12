@@ -1,17 +1,19 @@
+\set ON_ERROR_STOP on
+
 \if :{?community_id}
 \else
   \echo 'community_id is required'
-  \quit 3
+  do $$ begin raise exception 'community_id is required'; end $$;
 \endif
 \if :{?window_start}
 \else
   \echo 'window_start is required'
-  \quit 3
+  do $$ begin raise exception 'window_start is required'; end $$;
 \endif
 \if :{?window_end}
 \else
   \echo 'window_end is required'
-  \quit 3
+  do $$ begin raise exception 'window_end is required'; end $$;
 \endif
 
 with scoped_items as (
