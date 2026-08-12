@@ -82,8 +82,8 @@ try {
   );
   await observer.query(
     `insert into public.items (id, community_id, owner_id, name, category, description, photo_path, is_free, photo_uploaded)
-       values ($1, $2, $3, 'Concurrency drill', 'small_diy', 'Synthetic concurrent fixture', $1 || '/photo.jpg', true, true)`,
-    [ids.item, ids.community, ids.owner],
+       values ($1, $2, $3, 'Concurrency drill', 'small_diy', 'Synthetic concurrent fixture', $4, true, true)`,
+    [ids.item, ids.community, ids.owner, `${ids.item}/photo.jpg`],
   );
   await observer.query(
     `insert into public.bookings (id, item_id, borrower_id, start_date, end_date, status)
