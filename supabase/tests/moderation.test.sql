@@ -100,9 +100,9 @@ select set_config('request.jwt.claim.sub','',true);
 select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Active same-community admin required','anonymous caller cannot list reports') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000002',true);
 select throws_like('select * from public.moderation_reports','%permission denied%','raw moderation reports are not client-readable');
-select unlike(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure),'%reporter_id%','admin projection omits reporter_id');
-select unlike(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure),'%target_user_id%','admin projection omits target_user_id');
-select unlike(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure),'%handled_by%','admin projection omits handled_by');
+select ok(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure) not like '%reporter_id%','admin projection omits reporter_id');
+select ok(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure) not like '%target_user_id%','admin projection omits target_user_id');
+select ok(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure) not like '%handled_by%','admin projection omits handled_by');
 
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000005',true);
 select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Active same-community admin and open item report required','cross-community admin cannot hide an item') from ctx;
