@@ -104,9 +104,11 @@ select is(
   (select metadata from original_condition_object),
   'participants cannot rewrite condition photo objects'
 );
-select lives_ok(
+select throws_ok(
   $$delete from storage.objects where bucket_id='condition-photos' and name=(select name from original_condition_object)$$,
-  'an unauthorized Storage delete may complete while RLS affects no rows'
+  '42501',
+  null,
+  'Supabase rejects direct participant deletion of condition photo objects'
 );
 select is(
   (select count(*) from storage.objects where bucket_id='condition-photos' and name=(select name from original_condition_object)),
