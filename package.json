@@ -19,6 +19,7 @@
     "supabase:status": "npx supabase status",
     "supabase:reset": "npx supabase db reset",
     "demo:local": "node scripts/load-local-demo.mjs",
+    "metrics:test": "bash scripts/test-pilot-metrics.sh",
     "supabase:test": "npx supabase test db"
   },
   "dependencies": {

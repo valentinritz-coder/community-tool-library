@@ -4,8 +4,12 @@
 > user dashboard or a compliance claim. Unless stated otherwise, use a half-open UTC reporting window
 > `[window_start, window_end)` and scope every query to one pilot `community_id`.
 
-Run the current aggregate template with a read-only/operator database connection after reviewing its
-scope: `psql "$OPERATOR_DATABASE_URL" -v community_id='<uuid>' -v window_start='2026-08-01' -v window_end='2026-09-01' -f scripts/pilot-metrics.sql`.
+Run the current aggregate template with the PostgreSQL `psql` client and a read-only/operator database
+connection after reviewing its scope:
+`psql "$OPERATOR_DATABASE_URL" -v community_id='<uuid>' -v window_start='2026-08-01T00:00:00Z' -v window_end='2026-09-01T00:00:00Z' -f scripts/pilot-metrics.sql`.
+`OPERATOR_DATABASE_URL` is a secret, server/operator-only connection string supplied temporarily to the
+authorized operator shell or approved secret mechanism; never store it in the repository, expose it to
+the frontend, or configure it as `NEXT_PUBLIC_*`.
 Do not export row-level UUIDs or emails when counts answer the question.
 
 ## Metric inventory
@@ -17,7 +21,8 @@ current calculation; interpretation limits; and minimum missing data.
 
 - **Question:** How large is the community currently able to participate?
 - **Definition/calculation:** count distinct `memberships.user_id` whose status is `active` at report
-  execution; numerator is that count, denominator none; snapshot at `window_end` (execute then).
+  execution; numerator is that count and denominator none. This is strictly a current snapshot when the
+  query runs; the reporting window does not alter it.
   Source: `memberships`. The supplied SQL calculates it today.
 - **Limits/missing:** this is authorization status, not observed activity, and membership lacks status
   history. Historical or “used the service” activity would require a minimized status/event definition.
@@ -80,31 +85,45 @@ current calculation; interpretation limits; and minimum missing data.
 
 ### Repeat owners
 
-- **Question:** Are owners contributing inventory repeatedly?
-- **Definition/calculation:** count owners with at least two published, unarchived, non-hidden listings
-  created in the window/community; numerator is qualifying distinct owners, denominator is distinct
-  owners with at least one such listing. Source: `items`; supplied SQL reports count and share today.
-- **Limits/missing:** two listings are not two exchanges, and later row state changes results. No extra
-  data is required for this explicit listing-based definition.
+- **Question:** Are owners participating repeatedly in actual completed circulation?
+- **Definition/calculation:** among the cohort of community bookings created in the UTC window and
+  currently `returned`, count owners attached through `bookings.item_id -> items.owner_id` who have at
+  least two such completed exchanges. The numerator is qualifying distinct owners; the denominator is
+  distinct owners with at least one returned booking in that same creation cohort. Source: `bookings`
+  joined to `items`; supplied SQL reports the count and share today.
+- **Limits/missing:** `bookings` has no `returned_at`, so this does **not** mean “returned during the
+  window.” It is a request-created-in-window cohort evaluated using current status; results can change
+  when a cohort booking is later returned. A completion-period metric requires a future return timestamp,
+  which #31 does not add.
 
 ### Repeat borrowers
 
-- **Question:** Are borrowers requesting equipment repeatedly?
-- **Definition/calculation:** count borrowers with at least two booking requests created in the window;
-  numerator qualifying distinct borrowers, denominator distinct borrowers with at least one request.
-  Source: `bookings` and `items`; supplied SQL reports count and share today.
-- **Limits/missing:** it measures repeated intent, not successful borrowing; no additional data is
-  required. For repeated completed exchanges, a return timestamp would be needed for completion windows.
+- **Question:** Are borrowers participating repeatedly in actual completed circulation?
+- **Definition/calculation:** among community bookings created in the UTC window and currently
+  `returned`, count borrowers with at least two such completed exchanges. The numerator is qualifying
+  distinct borrowers; the denominator is distinct borrowers with at least one returned booking in that
+  creation cohort. Source: `bookings` joined to `items`; supplied SQL reports count and share today.
+- **Limits/missing:** there is no `returned_at`, so this is not a count of returns occurring in the
+  window. It is a request-created-in-window cohort evaluated at query time and can change later. A true
+  completion-period definition needs a future return timestamp; no new tracking is added by #31.
 
 ### Incidents
 
-- **Question:** How many product-recorded situations required moderation attention?
-- **Definition/calculation:** count `moderation_reports.created_at` in the window (open and handled);
-  numerator that count, denominator is booking requests in the same window for an optional
-  reports-per-request context ratio. Source: `moderation_reports`; supplied SQL calculates both today.
-- **Limits/missing:** a report is an allegation/queue item, not a verified incident. Cancellation and
-  dispute/non-return/damage are not structured statuses/reasons today and must not be inferred from
-  free-text notes. Adding those categories needs a dedicated product/legal issue, not generic telemetry.
+- **Question:** How many cancellations, disputes, non-returns, or damage incidents occurred?
+- **Definition/calculation:** numerator and denominator are **not currently calculable**. The current
+  model does not persist all required categories as structured incident facts, so the supplied SQL
+  returns `NULL`.
+- **Limits/missing:** moderation notes must not be interpreted as verified incidents. Minimal missing
+  data would be reviewed, structured lifecycle/incident categories and occurrence times, but adding a
+  taxonomy or workflow is outside #31.
+
+### Moderation reports (additional operational metric)
+
+- **Question:** How many allegations entered the community moderation queue?
+- **Definition/calculation:** count reports whose `moderation_reports.created_at` is in the UTC window;
+  numerator is that count and denominator none. Source: `moderation_reports`; supplied SQL calculates it.
+- **Limits/missing:** this is queue workload, not verified incident prevalence. One underlying situation
+  may produce multiple reports, and the count includes both open and subsequently handled rows.
 
 ## Privacy and interpretation
 

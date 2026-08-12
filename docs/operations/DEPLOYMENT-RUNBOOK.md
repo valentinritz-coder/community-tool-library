@@ -5,7 +5,8 @@
 
 ## Environments and prerequisites
 
-Use Node.js 20.9 or later, npm, the repository-pinned Supabase CLI, and Docker for local validation.
+Use Node.js 20.9 or later, npm, the repository-pinned Supabase CLI, Docker for local validation, and
+the PostgreSQL `psql` client for operator metrics/recovery checks.
 A target deployment requires a Supabase project, a user permitted to link/push migrations and inspect
 backups, and access to the chosen frontend environment and its environment-variable manager.
 
@@ -14,13 +15,14 @@ select a production frontend provider. The provider must support Node/Next.js 16
 identifiable releases, rollback to a prior frontend artifact, and server-side build configuration.
 Do not infer that any particular vendor has been approved.
 
-| Variable/credential                    | Use                                                      | Local                                             | Production                                                           | Classification and configuration location                       |
-| -------------------------------------- | -------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Browser API/Auth/Storage endpoint                        | Local CLI URL in ignored `.env.local`             | Hosted project URL                                                   | Public/client-safe; frontend environment manager                |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser authorization key; RLS still enforces access     | Local CLI publishable key in ignored `.env.local` | Target project's publishable key                                     | Public/client-safe; frontend environment manager                |
-| Supabase access token/login            | CLI project access                                       | Not needed for a local stack                      | Needed by release operator/CI if automated                           | Secret/server-only; operator or CI secret store, never frontend |
-| Target database password               | Link/push or recovery when requested by Supabase tooling | Local CLI default only                            | Target-specific credential                                           | Secret/server-only; operator or CI secret store                 |
-| Service-role key                       | Privileged administration (not used by the current app)  | Not required                                      | Do not configure unless a separately reviewed server-only use exists | Secret/server-only; never `NEXT_PUBLIC_`                        |
+| Variable/credential                    | Use                                                      | Local                                             | Production                                                           | Classification and configuration location                                                                           |
+| -------------------------------------- | -------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Browser API/Auth/Storage endpoint                        | Local CLI URL in ignored `.env.local`             | Hosted project URL                                                   | Public/client-safe; frontend environment manager                                                                    |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser authorization key; RLS still enforces access     | Local CLI publishable key in ignored `.env.local` | Target project's publishable key                                     | Public/client-safe; frontend environment manager                                                                    |
+| Supabase access token/login            | CLI project access                                       | Not needed for a local stack                      | Needed by release operator/CI if automated                           | Secret/server-only; operator or CI secret store, never frontend                                                     |
+| Target database password               | Link/push or recovery when requested by Supabase tooling | Local CLI default only                            | Target-specific credential                                           | Secret/server-only; operator or CI secret store                                                                     |
+| Service-role key                       | Privileged administration (not used by the current app)  | Not required                                      | Do not configure unless a separately reviewed server-only use exists | Secret/server-only; never `NEXT_PUBLIC_`                                                                            |
+| `OPERATOR_DATABASE_URL`                | Read-only pilot aggregate SQL via `psql`                 | Local DB URL only for local validation            | Short-lived target read-only connection string                       | Secret/server/operator-only; authorized operator shell or approved secret mechanism, never frontend/`NEXT_PUBLIC_*` |
 
 Local values printed by `supabase start` are disposable development credentials, not production
 secrets. `.env.local` is ignored; `.env.example` contains placeholders only.
@@ -41,6 +43,11 @@ secrets. `.env.local` is ignored; `.env.example` contains placeholders only.
    `npm run supabase -- db push --linked`.
 6. Re-run `migration list --linked`, verify no unexpected pending versions, inspect Supabase logs for
    migration errors, and run the smoke checks with synthetic pilot accounts.
+
+Before deploying the frontend, verify the target project's hosted Auth settings—not the local defaults
+in `supabase/config.toml`—against the selected frontend domain: Site URL, every permitted redirect URL,
+whether pilot signup is enabled, and whether email confirmation is required/configured. Final values
+remain an environment/operator decision; local URLs must not be copied into hosted production settings.
 
 Never use `supabase db reset` on a hosted production database. It is a destructive local
 reproducibility command, not a rollback mechanism.
