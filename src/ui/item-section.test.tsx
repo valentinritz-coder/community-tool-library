@@ -97,6 +97,7 @@ describe("ItemSection", () => {
     expect(
       await screen.findByRole("heading", { name: "Cordless screwdriver" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("1 item shown.")).toHaveAttribute("role", "status");
     expect(
       screen.getByText("Small, low-risk DIY", { selector: "p" }),
     ).toBeInTheDocument();
@@ -165,11 +166,11 @@ describe("ItemSection", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Add availability range" }),
     );
-    expect(
-      await screen.findByText(
-        "The end date must be on or after the start date.",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The end date must be on or after the start date.",
+    );
+    expect(start).toHaveAttribute("aria-invalid", "true");
+    expect(end).toHaveAttribute("aria-errormessage", "item-message");
     expect(query.insert).not.toHaveBeenCalled();
 
     fireEvent.change(end, { target: { value: "2026-08-15" } });
@@ -613,13 +614,15 @@ describe("ItemSection", () => {
       />,
     );
     fireEvent.click(
-      await screen.findByRole("button", { name: "Mark as handed over" }),
+      await screen.findByRole("button", { name: "Mark Drill as handed over" }),
     );
     expect(await screen.findByText("Status: Checked out")).toBeInTheDocument();
     expect(rpc).toHaveBeenCalledWith("record_handover", {
       target_booking_id: "booking-a",
     });
-    fireEvent.click(screen.getByRole("button", { name: "Mark as returned" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark Drill as returned" }),
+    );
     expect(
       await screen.findByRole("heading", {
         name: "Returned transaction history",

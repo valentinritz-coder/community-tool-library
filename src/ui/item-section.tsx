@@ -55,10 +55,27 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   >({});
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [invalidFields, setInvalidFields] = useState<string[]>([]);
   const [paid, setPaid] = useState(false);
   const [search, setSearch] = useState("");
   const [inventoryCommunityId, setInventoryCommunityId] = useState("");
   const [loading, setLoading] = useState(true);
+
+  function announce(
+    nextMessage: string,
+    options: { error?: boolean; fields?: string[] } = {},
+  ) {
+    setMessage(nextMessage);
+    setMessageIsError(options.error ?? false);
+    setInvalidFields(options.fields ?? []);
+  }
+
+  function fieldErrorProps(id: string) {
+    return invalidFields.includes(id)
+      ? { "aria-invalid": true as const, "aria-errormessage": "item-message" }
+      : {};
+  }
 
   const refresh = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -135,7 +152,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     const loadItems = window.setTimeout(() => {
       void refresh().catch((error: unknown) => {
         setLoading(false);
-        setMessage(messageFor(error));
+        announce(messageFor(error), { error: true });
       });
     }, 0);
     return () => window.clearTimeout(loadItems);
@@ -149,25 +166,37 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
 
   async function createItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    announce("");
     const form = new FormData(event.currentTarget);
     const photo = form.get("photo");
     if (!(photo instanceof File) || photo.size === 0) {
-      setMessage("Choose one photo for the item.");
+      announce("Choose one photo for the item.", {
+        error: true,
+        fields: ["item-photo"],
+      });
       return;
     }
     const extension = photoExtension(photo);
     if (!extension) {
-      setMessage("Use a JPEG, PNG, or WebP photo.");
+      announce("Use a JPEG, PNG, or WebP photo.", {
+        error: true,
+        fields: ["item-photo"],
+      });
       return;
     }
     if (photo.size > 5 * 1024 * 1024) {
-      setMessage("The photo must be 5 MB or smaller.");
+      announce("The photo must be 5 MB or smaller.", {
+        error: true,
+        fields: ["item-photo"],
+      });
       return;
     }
     const price = paid ? priceToCents(String(form.get("price") ?? "")) : null;
     if (paid && price === null) {
-      setMessage("Enter a daily price between 0.01 and 1000.00.");
+      announce("Enter a daily price between 0.01 and 1000.00.", {
+        error: true,
+        fields: ["item-price"],
+      });
       return;
     }
     try {
@@ -199,18 +228,19 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       await refresh();
       setMessage("Item listed for your community.");
     } catch (error) {
-      setMessage(messageFor(error));
+      announce(messageFor(error), { error: true });
     }
   }
 
   async function updateItem(event: FormEvent<HTMLFormElement>, item: Item) {
     event.preventDefault();
-    setMessage("");
+    announce("");
     const form = new FormData(event.currentTarget);
     const free = form.get("terms") === "free";
     const price = free ? null : priceToCents(String(form.get("price") ?? ""));
     if (!free && price === null) {
       setMessage("Enter a daily price between 0.01 and 1000.00.");
+      setMessageIsError(true);
       return;
     }
     const replacement = form.get("photo");
@@ -224,6 +254,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         setMessage(
           "The replacement must use the same JPEG, PNG, or WebP format and be 5 MB or smaller.",
         );
+        setMessageIsError(true);
         return;
       }
     }
@@ -237,7 +268,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         price_per_day_cents: price,
       })
       .eq("id", item.id);
-    if (result.error) setMessage(messageFor(result.error));
+    if (result.error) announce(messageFor(result.error), { error: true });
     else {
       if (replacement instanceof File && replacement.size > 0) {
         const uploaded = await getSupabaseBrowserClient()
@@ -247,7 +278,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
             upsert: true,
           });
         if (uploaded.error) {
-          setMessage(messageFor(uploaded.error));
+          announce(messageFor(uploaded.error), { error: true });
           return;
         }
         if (!item.photo_uploaded) {
@@ -256,7 +287,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
             { target_item_id: item.id },
           );
           if (published.error) {
-            setMessage(messageFor(published.error));
+            announce(messageFor(published.error), { error: true });
             return;
           }
         }
@@ -271,7 +302,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       .from("items")
       .update({ archived: true })
       .eq("id", itemId);
-    if (result.error) setMessage(messageFor(result.error));
+    if (result.error) announce(messageFor(result.error), { error: true });
     else {
       await refresh();
       setMessage("Item archived.");
@@ -284,13 +315,16 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   ) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    setMessage("");
+    announce("");
     const form = new FormData(formElement);
     const startDate = String(form.get("start_date") ?? "");
     const endDate = String(form.get("end_date") ?? "");
     const dateError = validateAvailabilityDates(startDate, endDate);
     if (dateError) {
-      setMessage(dateError);
+      announce(dateError, {
+        error: true,
+        fields: [`availability-start-${itemId}`, `availability-end-${itemId}`],
+      });
       return;
     }
     const result = await getSupabaseBrowserClient()
@@ -306,6 +340,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           ? "This range overlaps an existing availability range."
           : messageFor(result.error),
       );
+      setMessageIsError(true);
       return;
     }
     formElement.reset();
@@ -314,12 +349,12 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   }
 
   async function removeAvailability(availabilityId: string) {
-    setMessage("");
+    announce("");
     const result = await getSupabaseBrowserClient()
       .from("availabilities")
       .delete()
       .eq("id", availabilityId);
-    if (result.error) setMessage(messageFor(result.error));
+    if (result.error) announce(messageFor(result.error), { error: true });
     else {
       await refresh();
       setMessage("Availability range removed.");
@@ -332,13 +367,16 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   ) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    setMessage("");
+    announce("");
     const form = new FormData(formElement);
     const startDate = String(form.get("start_date") ?? "");
     const endDate = String(form.get("end_date") ?? "");
     const dateError = validateBookingDates(startDate, endDate);
     if (dateError) {
-      setMessage(dateError);
+      announce(dateError, {
+        error: true,
+        fields: [`booking-start-${itemId}`, `booking-end-${itemId}`],
+      });
       return;
     }
 
@@ -353,6 +391,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           ? "Those dates are not fully available. Choose dates covered by the owner's availability."
           : messageFor(result.error),
       );
+      setMessageIsError(true);
       return;
     }
     formElement.reset();
@@ -364,7 +403,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     booking: BookingRequest,
     decision: "accepted" | "refused",
   ) {
-    setMessage("");
+    announce("");
     const result = await getSupabaseBrowserClient().rpc("decide_booking", {
       target_booking_id: booking.id,
       decision,
@@ -392,8 +431,9 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           "You are not authorized to decide this reservation request.",
         );
       } else {
-        setMessage(messageFor(result.error));
+        announce(messageFor(result.error), { error: true });
       }
+      setMessageIsError(true);
       await refresh().catch(() => undefined);
       return;
     }
@@ -406,7 +446,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   }
 
   async function advanceBooking(booking: BookingRequest) {
-    setMessage("");
+    announce("");
     const handover = booking.status === "accepted";
     const result = await getSupabaseBrowserClient().rpc(
       handover ? "record_handover" : "record_return",
@@ -418,6 +458,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
           ? "This transaction was already updated. Refreshing its status."
           : messageFor(result.error),
       );
+      setMessageIsError(true);
       await refresh().catch(() => undefined);
       return;
     }
@@ -438,16 +479,25 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
     const formElement = event.currentTarget;
     const photo = new FormData(formElement).get("condition_photo");
     if (!(photo instanceof File) || photo.size === 0) {
-      setMessage("Choose a condition photo.");
+      announce("Choose a condition photo.", {
+        error: true,
+        fields: [`condition-${phase}-${booking.id}`],
+      });
       return;
     }
     const extension = photoExtension(photo);
     if (!extension) {
-      setMessage("Use a JPEG, PNG, or WebP photo.");
+      announce("Use a JPEG, PNG, or WebP photo.", {
+        error: true,
+        fields: [`condition-${phase}-${booking.id}`],
+      });
       return;
     }
     if (photo.size > 5 * 1024 * 1024) {
-      setMessage("The photo must be 5 MB or smaller.");
+      announce("The photo must be 5 MB or smaller.", {
+        error: true,
+        fields: [`condition-${phase}-${booking.id}`],
+      });
       return;
     }
     const supabase = getSupabaseBrowserClient();
@@ -457,13 +507,15 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
       photo_extension: extension,
     });
     if (reserved.error) {
-      setMessage(messageFor(reserved.error));
+      announce(messageFor(reserved.error), { error: true });
       await refresh().catch(() => undefined);
       return;
     }
     const report = (reserved.data as ConditionReport[])[0];
     if (!report) {
-      setMessage("The condition photo could not be prepared. Try again.");
+      announce("The condition photo could not be prepared. Try again.", {
+        error: true,
+      });
       return;
     }
     const uploaded = await supabase.storage
@@ -473,7 +525,9 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
         upsert: false,
       });
     if (uploaded.error) {
-      setMessage("The condition photo could not be uploaded. Try again.");
+      announce("The condition photo could not be uploaded. Try again.", {
+        error: true,
+      });
       return;
     }
     formElement.reset();
@@ -530,17 +584,26 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
               name="condition_photo"
               type="file"
               accept="image/jpeg,image/png,image/webp"
+              {...fieldErrorProps(`condition-${phase}-${booking.id}`)}
             />
             <button type="submit">Add {phase} condition photo</button>
           </form>
         )}
         {booking.status === "accepted" && (
-          <button type="button" onClick={() => void advanceBooking(booking)}>
+          <button
+            type="button"
+            aria-label={`Mark ${booking.item_name} as handed over`}
+            onClick={() => void advanceBooking(booking)}
+          >
             Mark as handed over
           </button>
         )}
         {booking.status === "checked_out" && (
-          <button type="button" onClick={() => void advanceBooking(booking)}>
+          <button
+            type="button"
+            aria-label={`Mark ${booking.item_name} as returned`}
+            onClick={() => void advanceBooking(booking)}
+          >
             Mark as returned
           </button>
         )}
@@ -555,7 +618,12 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
   return (
     <section className="card wide" aria-labelledby="items-title">
       <h2 id="items-title">Community inventory</h2>
-      <p className="notice" role="status" aria-live="polite">
+      <p
+        id="item-message"
+        className="notice"
+        role={messageIsError ? "alert" : "status"}
+        aria-live={messageIsError ? "assertive" : "polite"}
+      >
         {message}
       </p>
       {communities.length === 0 ? (
@@ -584,12 +652,17 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
               placeholder="Item name or category"
             />
           </div>
+          <p className="visually-hidden" role="status" aria-live="polite">
+            {!loading &&
+              `${communityInventory.length} ${communityInventory.length === 1 ? "item" : "items"} shown.`}
+          </p>
           {loading ? (
             <p role="status">Loading community inventory…</p>
           ) : communityInventory.length > 0 ? (
-            <div className="item-list" aria-live="polite">
+            <div className="item-list">
               {communityInventory.map((item) => (
                 <article key={item.id} className="item-card">
+                  <h3>{item.name}</h3>
                   {photoUrls[item.id] ? (
                     <img
                       src={photoUrls[item.id]}
@@ -598,7 +671,6 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   ) : (
                     <p>Photo temporarily unavailable.</p>
                   )}
-                  <h3>{item.name}</h3>
                   <p className="item-category">
                     {itemCategoryLabel(item.category)}
                   </p>
@@ -625,6 +697,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         name="start_date"
                         type="date"
                         required
+                        {...fieldErrorProps(`booking-start-${item.id}`)}
                       />
                       <label htmlFor={`booking-end-${item.id}`}>End date</label>
                       <input
@@ -632,6 +705,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                         name="end_date"
                         type="date"
                         required
+                        {...fieldErrorProps(`booking-end-${item.id}`)}
                       />
                       <button type="submit">Request reservation</button>
                     </form>
@@ -852,6 +926,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
             type="file"
             accept="image/jpeg,image/png,image/webp"
             required
+            {...fieldErrorProps("item-photo")}
           />
           <button type="submit">List item</button>
         </form>
@@ -909,6 +984,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   name="start_date"
                   type="date"
                   required
+                  {...fieldErrorProps(`availability-start-${item.id}`)}
                 />
                 <label htmlFor={`availability-end-${item.id}`}>
                   End date (included)
@@ -918,6 +994,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                   name="end_date"
                   type="date"
                   required
+                  {...fieldErrorProps(`availability-end-${item.id}`)}
                 />
                 <button type="submit">Add availability range</button>
               </form>
@@ -1002,6 +1079,7 @@ export function ItemSection({ communities, currentUserId }: ItemSectionProps) {
                     <button
                       type="button"
                       className="secondary"
+                      aria-label={`Archive ${item.name}`}
                       onClick={() => void archive(item.id)}
                     >
                       Archive item

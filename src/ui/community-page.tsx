@@ -29,6 +29,13 @@ export function CommunityPage() {
   const [currentUserId, setCurrentUserId] = useState("");
   const [state, setState] = useState<CommunityState>(emptyState);
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  function announce(nextMessage: string, isError = false) {
+    setMessage(nextMessage);
+    setMessageIsError(isError);
+  }
 
   async function refresh() {
     const supabase = getSupabaseBrowserClient();
@@ -54,7 +61,7 @@ export function CommunityPage() {
         setCurrentUserId(data.session?.user.id ?? "");
         if (signedIn) await refresh();
       } catch (error) {
-        setMessage(errorMessage(error));
+        announce(errorMessage(error), true);
       }
     }
 
@@ -69,7 +76,8 @@ export function CommunityPage() {
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
+    announce("");
+    setBusy(true);
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
@@ -84,9 +92,11 @@ export function CommunityPage() {
       const { data } = await getSupabaseBrowserClient().auth.getUser();
       setCurrentUserId(data.user?.id ?? "");
       await refresh();
-      setMessage("Signed in successfully.");
+      announce("Signed in successfully.");
     } catch (error) {
-      setMessage(errorMessage(error));
+      announce(errorMessage(error), true);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -94,17 +104,20 @@ export function CommunityPage() {
     const form = document.querySelector<HTMLFormElement>("#sign-in-form");
     if (!form?.reportValidity()) return;
     const data = new FormData(form);
+    setBusy(true);
     try {
       const { error } = await getSupabaseBrowserClient().auth.signUp({
         email: String(data.get("email") ?? "").trim(),
         password: String(data.get("password") ?? ""),
       });
       if (error) throw error;
-      setMessage(
+      announce(
         "Account created. Check your email if confirmation is required, then sign in.",
       );
     } catch (error) {
-      setMessage(errorMessage(error));
+      announce(errorMessage(error), true);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -113,7 +126,8 @@ export function CommunityPage() {
     parameters: Record<string, string>,
     success: string,
   ) {
-    setMessage("");
+    announce("");
+    setBusy(true);
     try {
       const { error } = await getSupabaseBrowserClient().rpc(
         functionName,
@@ -121,9 +135,11 @@ export function CommunityPage() {
       );
       if (error) throw error;
       await refresh();
-      setMessage(success);
+      announce(success);
     } catch (error) {
-      setMessage(errorMessage(error));
+      announce(errorMessage(error), true);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -148,13 +164,25 @@ export function CommunityPage() {
             Create a private community or request access with a join code.
           </p>
         </div>
-        <p className="notice" role="status" aria-live="polite">
+        <p
+          id="community-message"
+          className="notice"
+          role={messageIsError ? "alert" : "status"}
+          aria-live={messageIsError ? "assertive" : "polite"}
+        >
           {message}
         </p>
         {!authenticated ? (
           <section className="card" aria-labelledby="sign-in-title">
             <h2 id="sign-in-title">Sign in</h2>
-            <form id="sign-in-form" onSubmit={authenticate}>
+            <form
+              id="sign-in-form"
+              onSubmit={authenticate}
+              aria-describedby={
+                messageIsError ? "community-message" : undefined
+              }
+              aria-busy={busy}
+            >
               <label htmlFor="email">Email address</label>
               <input
                 id="email"
@@ -173,10 +201,13 @@ export function CommunityPage() {
                 required
               />
               <div className="actions">
-                <button type="submit">Sign in</button>
+                <button type="submit" disabled={busy}>
+                  Sign in
+                </button>
                 <button
                   type="button"
                   className="secondary"
+                  disabled={busy}
                   onClick={() => void createAccount()}
                 >
                   Create account

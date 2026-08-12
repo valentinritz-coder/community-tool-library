@@ -52,3 +52,23 @@ Measure:
 ## Engineering
 
 Automated accessibility checks are useful but insufficient. Add automated checks to CI/browser tests after the initial app skeleton exists, then pair them with manual testing.
+
+## Issue #28 focused review
+
+The core-flow DOM and interaction structure was reviewed for authentication and community access,
+inventory discovery, listing and availability, reservation decisions, handover/return, and condition
+evidence. The review found that validation failures were announced only as generic status updates,
+client-side errors were not associated with their fields, repeated transaction actions did not include
+the item name, search updates could announce the entire result list, and item images preceded their
+identifying heading in reading order.
+
+The implementation now uses assertive alerts for failures, associates client validation errors with
+invalid fields, gives repeated actions contextual names, announces a concise search-result count, and
+puts each item heading before its informative image. Native controls, landmarks, headings, labels,
+required attributes, disclosure widgets, and visible focus treatment remain the basis of keyboard and
+screen-reader operation rather than custom ARIA widgets.
+
+This was a focused code/DOM review and automated regression pass, not WCAG certification and not a
+substitute for testing with disabled pilot users. Before pilot release, complete the keyboard and
+screen-reader scenarios above in supported browser/assistive-technology combinations, including file
+selection and native date controls, and verify zoom/reflow on representative mobile devices.
