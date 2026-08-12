@@ -112,8 +112,11 @@ select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000002'
 select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Active same-community admin and open item report required','normal member cannot hide an item') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000001',true);
 select lives_ok(format('select public.hide_reported_item(%L)',item_report),'same-community active admin hides an item') from ctx;
+set local role postgres;
 select is((select status::text||':'||action_taken from public.moderation_reports where id=(select item_report from ctx)),'handled:item hidden','hide atomically records handled and item hidden');
 select is((select handled_by from public.moderation_reports where id=(select item_report from ctx)),'90000000-0000-4000-8000-000000000001'::uuid,'hide records the acting admin');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000001',true);
 select throws_ok(format('select public.hide_reported_item(%L)',item_report),'22023','Report is already handled','handled report cannot be reused to hide') from ctx;
 select throws_ok(format('select public.handle_moderation_report(%L)',item_report),'22023','Report is already handled','handle cannot race after hide') from ctx;
 select is((select moderation_hidden from public.items where id=(select item1 from ctx)),true,'item has independent moderation state');
