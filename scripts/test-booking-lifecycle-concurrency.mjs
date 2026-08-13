@@ -29,14 +29,14 @@ async function waitUntilSecondSessionIsBlocked(observer, processId) {
     const result = await observer.query(
       `select wait_event_type, wait_event
        from pg_stat_activity
-       where pid = $1 and query like '%record_handover%'`,
+       where pid = $1 and query like '%cancel_booking%'`,
       [processId],
     );
     if (result.rows[0]?.wait_event_type === "Lock") return result.rows[0];
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error(
-    "The second handover session did not wait on the booking row lock",
+    "The cancellation session did not wait on the booking row lock",
   );
 }
 
@@ -105,7 +105,7 @@ try {
   assert.equal(first.rows[0].status, "checked_out");
 
   const secondOutcome = borrowerSession
-    .query("select status::text from public.record_handover($1)", [ids.booking])
+    .query("select status::text from public.cancel_booking($1)", [ids.booking])
     .then(
       (result) => ({ result }),
       (error) => ({ error }),
@@ -119,10 +119,13 @@ try {
   assert.equal(
     second.result,
     undefined,
-    "the second handover must not succeed",
+    "cancellation must not overwrite a committed handover",
   );
   assert.equal(second.error?.code, "55000");
-  assert.match(second.error?.message ?? "", /not in the required state/);
+  assert.match(
+    second.error?.message ?? "",
+    /cannot be cancelled after handover/,
+  );
   await borrowerSession.query("rollback");
 
   const final = await observer.query(
@@ -131,7 +134,7 @@ try {
   );
   assert.equal(final.rows[0].status, "checked_out");
   console.log(
-    "Concurrent lifecycle test passed: two sessions contended for one booking; exactly one handover succeeded.",
+    "Concurrent lifecycle test passed: handover and cancellation contended for one booking; exactly one transition succeeded.",
   );
 } finally {
   if (ownerConnected)

@@ -4,7 +4,13 @@ export interface BookingRequest {
   item_name: string;
   start_date: string;
   end_date: string;
-  status: "requested" | "accepted" | "refused" | "checked_out" | "returned";
+  status:
+    | "requested"
+    | "accepted"
+    | "refused"
+    | "checked_out"
+    | "returned"
+    | "cancelled";
   is_borrower: boolean;
   is_item_owner: boolean;
   can_decide: boolean;
@@ -22,7 +28,16 @@ export const bookingStatusLabel: Record<BookingRequest["status"], string> = {
   refused: "Refused",
   checked_out: "Checked out",
   returned: "Returned",
+  cancelled: "Cancelled",
 };
+
+export function canCancelBooking(booking: BookingRequest): boolean {
+  return (
+    (booking.status === "requested" && booking.is_borrower) ||
+    (booking.status === "accepted" &&
+      (booking.is_borrower || booking.is_item_owner))
+  );
+}
 
 export type ConditionPhase = "before" | "after";
 
