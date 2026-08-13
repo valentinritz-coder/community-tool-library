@@ -2,6 +2,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 
 const password = "demo-local-only";
 const communityName = "Example Test Tool Circle";
+const communityJoinCode = "d1000000-0000-4000-8000-000000000099";
 const itemName = "E2E compact screwdriver";
 const itemPhoto = {
   name: "e2e-item.png",
@@ -38,36 +39,56 @@ function reservation(page: Page, heading: string) {
 }
 
 test.describe.serial("critical MVP journeys", () => {
-  test("real authentication and membership approval grant community access", async ({
+  test("real authentication, join, and approval grant community access", async ({
     browser,
   }) => {
-    const pending = await signIn(browser, "demo-pending@example.test");
+    const joining = await signIn(browser, "demo-pending@example.test");
     await expect(
-      pending.page.getByRole("heading", { name: "Your active communities" }),
+      joining.page.getByRole("heading", { name: "Your active communities" }),
     ).toBeVisible();
     await expect(
-      pending.page.getByText("No active communities yet."),
+      joining.page.getByText("No active communities yet."),
     ).toBeVisible();
+
+    await joining.page
+      .getByLabel("Community join code")
+      .fill(communityJoinCode);
+    await joining.page.getByRole("button", { name: "Request to join" }).click();
+    await expect(
+      joining.page.getByText("Request sent. An admin must approve it."),
+    ).toBeVisible();
+    const pendingMembership = joining.page
+      .getByRole("heading", { name: "Memberships and requests" })
+      .locator("..")
+      .getByRole("listitem")
+      .filter({ hasText: "member — pending" });
+    await expect(pendingMembership).toBeVisible();
 
     const admin = await signIn(browser, "demo-admin@example.test");
     await expect(
       admin.page.getByText(communityName, { exact: true }),
     ).toBeVisible();
-    await admin.page
+    const specificPendingMembership = admin.page
+      .getByRole("heading", { name: "Memberships and requests" })
+      .locator("..")
+      .getByRole("listitem")
+      .filter({ hasText: "member — pending" });
+    await expect(specificPendingMembership).toHaveCount(1);
+    await specificPendingMembership
       .getByRole("button", { name: "Approve membership" })
       .click();
     await expect(admin.page.getByText("Membership approved.")).toBeVisible();
 
-    await pending.page.reload();
+    await joining.page.reload();
     await expect(
-      pending.page.getByText(communityName, { exact: true }),
+      joining.page.getByText(communityName, { exact: true }),
     ).toBeVisible();
     await expect(
-      pending.page.getByRole("heading", { name: "Community inventory" }),
+      joining.page.getByRole("heading", { name: "Community inventory" }),
     ).toBeVisible();
 
     await admin.context.close();
-    await pending.context.close();
+    await joining.context.close();
   });
 
   test("owner lists an available item and accepts a borrower request", async ({

@@ -23,7 +23,8 @@ npm run test:e2e
 
 Never substitute a hosted project or a service-role key. The test command starts Next.js and expects
 the demo reset/load procedure above to have completed. Tests intentionally run serially because the
-listing, booking and return scenarios form one short workflow.
+listing, booking and return scenarios form one short workflow. Playwright retries are deliberately
+disabled because retrying that workflow would reuse already-mutated external database state.
 
 For interactive debugging use `npm run test:e2e:headed`. Failures retain a Playwright trace and a
 screenshot under ignored `test-results/`; open a trace with `npx playwright show-trace <trace.zip>`.

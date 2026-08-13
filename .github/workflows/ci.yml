@@ -48,6 +48,21 @@ jobs:
       - name: Load and verify local synthetic demo
         run: npm run demo:local
 
+      - name: Test pilot metrics SQL
+        run: npm run metrics:test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
       - name: Configure local browser-safe Supabase values
         run: |
           eval "$(npx supabase status --output env)"
@@ -68,21 +83,6 @@ jobs:
           path: test-results
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Test pilot metrics SQL
-        run: npm run metrics:test
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
 
       - name: Stop local Supabase
         if: always()
