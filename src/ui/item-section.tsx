@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Community } from "../domain/community";
 import {
   bookingStatusLabel,
+  canCancelBooking,
   validateBookingDates,
   type BookingContact,
   type BookingRequest,
@@ -559,6 +560,48 @@ export function ItemSection({
     }
   }
 
+  async function cancelBooking(booking: BookingRequest) {
+    announce("");
+    const action = `booking-cancel-${booking.id}`;
+    if (!beginAction(action)) return;
+    try {
+      const result = await getSupabaseBrowserClient().rpc("cancel_booking", {
+        target_booking_id: booking.id,
+      });
+      if (result.error) {
+        const serverMessage = result.error.message;
+        if (
+          serverMessage.includes("current state") ||
+          serverMessage.includes("after handover")
+        ) {
+          announce(
+            serverMessage.includes("after handover")
+              ? "This reservation cannot be cancelled after handover. Refreshing its status."
+              : "This reservation was already changed. Refreshing its status.",
+            { error: true },
+          );
+        } else if (
+          serverMessage.includes("Only the borrower") ||
+          serverMessage.includes("Only transaction participants")
+        ) {
+          announce("You are not authorized to cancel this reservation.", {
+            error: true,
+          });
+        } else {
+          announce("The reservation could not be cancelled. Try again.", {
+            error: true,
+          });
+        }
+        await refresh().catch(() => undefined);
+        return;
+      }
+      await refresh();
+      announce("Reservation cancelled. It is preserved in your history.");
+    } finally {
+      endAction(action);
+    }
+  }
+
   async function uploadCondition(
     event: FormEvent<HTMLFormElement>,
     booking: BookingRequest,
@@ -713,6 +756,18 @@ export function ItemSection({
             onClick={() => void advanceBooking(booking)}
           >
             Mark as returned
+          </button>
+        )}
+        {canCancelBooking(booking) && (
+          <button
+            type="button"
+            className="secondary"
+            aria-label={`Cancel reservation for ${booking.item_name}`}
+            aria-busy={isPending(`booking-cancel-${booking.id}`)}
+            disabled={isPending(`booking-cancel-${booking.id}`)}
+            onClick={() => void cancelBooking(booking)}
+          >
+            Cancel reservation
           </button>
         )}
       </>
@@ -932,7 +987,10 @@ export function ItemSection({
       >
         <h3 id="your-bookings-title">Your reservation requests</h3>
         {bookings.filter(
-          (booking) => booking.is_borrower && booking.status !== "returned",
+          (booking) =>
+            booking.is_borrower &&
+            booking.status !== "returned" &&
+            booking.status !== "cancelled",
         ).length === 0 ? (
           <p>You have not requested a reservation yet.</p>
         ) : (
@@ -940,7 +998,9 @@ export function ItemSection({
             {bookings
               .filter(
                 (booking) =>
-                  booking.is_borrower && booking.status !== "returned",
+                  booking.is_borrower &&
+                  booking.status !== "returned" &&
+                  booking.status !== "cancelled",
               )
               .map((booking) => (
                 <li key={`borrower-${booking.id}`}>
@@ -974,7 +1034,8 @@ export function ItemSection({
         {bookings.filter(
           (booking) =>
             (booking.is_item_owner || booking.can_decide) &&
-            booking.status !== "returned",
+            booking.status !== "returned" &&
+            booking.status !== "cancelled",
         ).length === 0 ? (
           <p>No reservation requests for you to decide.</p>
         ) : (
@@ -983,7 +1044,8 @@ export function ItemSection({
               .filter(
                 (booking) =>
                   (booking.is_item_owner || booking.can_decide) &&
-                  booking.status !== "returned",
+                  booking.status !== "returned" &&
+                  booking.status !== "cancelled",
               )
               .map((booking) => (
                 <li key={`owner-${booking.id}`}>
@@ -1034,19 +1096,20 @@ export function ItemSection({
         )}
       </section>
       <section className="booking-requests" aria-labelledby="history-title">
-        <h3 id="history-title">Returned transaction history</h3>
+        <h3 id="history-title">Transaction history</h3>
         {bookings.filter(
           (booking) =>
-            booking.status === "returned" &&
+            (booking.status === "returned" || booking.status === "cancelled") &&
             (booking.is_borrower || booking.is_item_owner),
         ).length === 0 ? (
-          <p>No returned transactions yet.</p>
+          <p>No completed or cancelled transactions yet.</p>
         ) : (
           <ul>
             {bookings
               .filter(
                 (booking) =>
-                  booking.status === "returned" &&
+                  (booking.status === "returned" ||
+                    booking.status === "cancelled") &&
                   (booking.is_borrower || booking.is_item_owner),
               )
               .map((booking) => (

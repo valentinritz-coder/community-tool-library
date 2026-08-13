@@ -12,7 +12,10 @@ const ids = {
   borrower: "c0000000-0000-4000-8000-000000000002",
   community: "c1000000-0000-4000-8000-000000000001",
   item: "c2000000-0000-4000-8000-000000000001",
-  booking: "c3000000-0000-4000-8000-000000000001",
+  handoverRace: "c3000000-0000-4000-8000-000000000001",
+  handoverWins: "c3000000-0000-4000-8000-000000000002",
+  cancellationWins: "c3000000-0000-4000-8000-000000000003",
+  decisionRace: "c3000000-0000-4000-8000-000000000004",
 };
 
 function client(applicationName) {
@@ -23,24 +26,22 @@ function client(applicationName) {
   });
 }
 
-async function waitUntilSecondSessionIsBlocked(observer, processId) {
+async function waitUntilBlocked(observer, processId, queryPattern, scenario) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     const result = await observer.query(
       `select wait_event_type, wait_event
        from pg_stat_activity
-       where pid = $1 and query like '%record_handover%'`,
-      [processId],
+       where pid = $1 and query like $2`,
+      [processId, `%${queryPattern}%`],
     );
     if (result.rows[0]?.wait_event_type === "Lock") return result.rows[0];
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error(
-    "The second handover session did not wait on the booking row lock",
-  );
+  throw new Error(`${scenario}: the second session did not wait on a lock`);
 }
 
-async function setParticipant(clientConnection, userId) {
+async function beginAs(clientConnection, userId) {
   await clientConnection.query("begin");
   await clientConnection.query("set local role authenticated");
   await clientConnection.query(
@@ -49,22 +50,81 @@ async function setParticipant(clientConnection, userId) {
   );
 }
 
+async function runRace({
+  observer,
+  firstSession,
+  secondSession,
+  bookingId,
+  scenario,
+  firstUserId = ids.owner,
+  secondUserId = ids.borrower,
+  firstQuery,
+  firstExpectedStatus,
+  secondQuery,
+  secondQueryPattern,
+  secondErrorMessage,
+  finalStatus,
+}) {
+  await beginAs(firstSession, firstUserId);
+  await beginAs(secondSession, secondUserId);
+  const secondPid = (
+    await secondSession.query("select pg_backend_pid() as pid")
+  ).rows[0].pid;
+
+  const first = await firstSession.query(firstQuery, [bookingId]);
+  assert.equal(
+    first.rows[0].status,
+    firstExpectedStatus,
+    `${scenario}: winner`,
+  );
+
+  const secondOutcome = secondSession.query(secondQuery, [bookingId]).then(
+    (result) => ({ result }),
+    (error) => ({ error }),
+  );
+
+  const wait = await waitUntilBlocked(
+    observer,
+    secondPid,
+    secondQueryPattern,
+    scenario,
+  );
+  assert.equal(wait.wait_event_type, "Lock", `${scenario}: lock wait`);
+  await firstSession.query("commit");
+
+  const second = await secondOutcome;
+  assert.equal(second.result, undefined, `${scenario}: loser must not succeed`);
+  assert.equal(second.error?.code, "55000", `${scenario}: loser SQLSTATE`);
+  assert.match(
+    second.error?.message ?? "",
+    secondErrorMessage,
+    `${scenario}: loser state error`,
+  );
+  await secondSession.query("rollback");
+
+  const final = await observer.query(
+    "select status::text from public.bookings where id = $1",
+    [bookingId],
+  );
+  assert.equal(final.rows[0].status, finalStatus, `${scenario}: final status`);
+  console.log(`Concurrent lifecycle test passed: ${scenario}.`);
+}
+
 const observer = client("lifecycle-observer");
-const ownerSession = client("lifecycle-owner");
-const borrowerSession = client("lifecycle-borrower");
+const firstSession = client("lifecycle-first");
+const secondSession = client("lifecycle-second");
 let observerConnected = false;
-let ownerConnected = false;
-let borrowerConnected = false;
+let firstConnected = false;
+let secondConnected = false;
 
 try {
   await observer.connect();
   observerConnected = true;
-  await ownerSession.connect();
-  ownerConnected = true;
-  await borrowerSession.connect();
-  borrowerConnected = true;
+  await firstSession.connect();
+  firstConnected = true;
+  await secondSession.connect();
+  secondConnected = true;
 
-  await observer.query("begin");
   await observer.query(
     `insert into auth.users (id, instance_id, aud, role, email, encrypted_password) values
        ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'concurrent-owner@example.test', ''),
@@ -86,58 +146,89 @@ try {
     [ids.item, ids.community, ids.owner, `${ids.item}/photo.jpg`],
   );
   await observer.query(
-    `insert into public.bookings (id, item_id, borrower_id, start_date, end_date, status)
-       values ($1, $2, $3, '2026-12-01', '2026-12-01', 'accepted')`,
-    [ids.booking, ids.item, ids.borrower],
+    `insert into public.availabilities (item_id, start_date, end_date)
+     values ($1, '2026-12-01', '2026-12-31')`,
+    [ids.item],
   );
-  await observer.query("commit");
-
-  await setParticipant(ownerSession, ids.owner);
-  await setParticipant(borrowerSession, ids.borrower);
-  const borrowerPid = (
-    await borrowerSession.query("select pg_backend_pid() as pid")
-  ).rows[0].pid;
-
-  const first = await ownerSession.query(
-    "select status::text from public.record_handover($1)",
-    [ids.booking],
+  await observer.query(
+    `insert into public.bookings (id, item_id, borrower_id, start_date, end_date, status) values
+       ($1, $5, $6, '2026-12-01', '2026-12-01', 'accepted'),
+       ($2, $5, $6, '2026-12-02', '2026-12-02', 'accepted'),
+       ($3, $5, $6, '2026-12-03', '2026-12-03', 'accepted'),
+       ($4, $5, $6, '2026-12-04', '2026-12-04', 'requested')`,
+    [
+      ids.handoverRace,
+      ids.handoverWins,
+      ids.cancellationWins,
+      ids.decisionRace,
+      ids.item,
+      ids.borrower,
+    ],
   );
-  assert.equal(first.rows[0].status, "checked_out");
 
-  const secondOutcome = borrowerSession
-    .query("select status::text from public.record_handover($1)", [ids.booking])
-    .then(
-      (result) => ({ result }),
-      (error) => ({ error }),
-    );
+  await runRace({
+    observer,
+    firstSession,
+    secondSession,
+    bookingId: ids.handoverRace,
+    scenario: "handover versus handover serializes and exactly one succeeds",
+    firstQuery: "select status::text from public.record_handover($1)",
+    firstExpectedStatus: "checked_out",
+    secondQuery: "select status::text from public.record_handover($1)",
+    secondQueryPattern: "record_handover",
+    secondErrorMessage: /not in the required state/,
+    finalStatus: "checked_out",
+  });
 
-  const wait = await waitUntilSecondSessionIsBlocked(observer, borrowerPid);
-  assert.equal(wait.wait_event_type, "Lock");
-  await ownerSession.query("commit");
+  await runRace({
+    observer,
+    firstSession,
+    secondSession,
+    bookingId: ids.handoverWins,
+    scenario: "handover wins against cancellation",
+    firstQuery: "select status::text from public.record_handover($1)",
+    firstExpectedStatus: "checked_out",
+    secondQuery: "select status::text from public.cancel_booking($1)",
+    secondQueryPattern: "cancel_booking",
+    secondErrorMessage: /cannot be cancelled after handover/,
+    finalStatus: "checked_out",
+  });
 
-  const second = await secondOutcome;
-  assert.equal(
-    second.result,
-    undefined,
-    "the second handover must not succeed",
-  );
-  assert.equal(second.error?.code, "55000");
-  assert.match(second.error?.message ?? "", /not in the required state/);
-  await borrowerSession.query("rollback");
+  await runRace({
+    observer,
+    firstSession,
+    secondSession,
+    bookingId: ids.cancellationWins,
+    scenario: "cancellation wins against handover",
+    firstQuery: "select status::text from public.cancel_booking($1)",
+    firstExpectedStatus: "cancelled",
+    secondQuery: "select status::text from public.record_handover($1)",
+    secondQueryPattern: "record_handover",
+    secondErrorMessage: /not in the required state/,
+    finalStatus: "cancelled",
+  });
 
-  const final = await observer.query(
-    "select status::text from public.bookings where id = $1",
-    [ids.booking],
-  );
-  assert.equal(final.rows[0].status, "checked_out");
-  console.log(
-    "Concurrent lifecycle test passed: two sessions contended for one booking; exactly one handover succeeded.",
-  );
+  await runRace({
+    observer,
+    firstSession,
+    secondSession,
+    bookingId: ids.decisionRace,
+    scenario: "requested cancellation wins against acceptance",
+    firstUserId: ids.borrower,
+    secondUserId: ids.owner,
+    firstQuery: "select status::text from public.cancel_booking($1)",
+    firstExpectedStatus: "cancelled",
+    secondQuery:
+      "select status::text from public.decide_booking($1, 'accepted')",
+    secondQueryPattern: "decide_booking",
+    secondErrorMessage: /already been decided/,
+    finalStatus: "cancelled",
+  });
 } finally {
-  if (ownerConnected)
-    await ownerSession.query("rollback").catch(() => undefined);
-  if (borrowerConnected)
-    await borrowerSession.query("rollback").catch(() => undefined);
+  if (firstConnected)
+    await firstSession.query("rollback").catch(() => undefined);
+  if (secondConnected)
+    await secondSession.query("rollback").catch(() => undefined);
   if (observerConnected) {
     await observer
       .query("delete from public.communities where id = $1", [ids.community])
@@ -150,10 +241,8 @@ try {
       .catch(() => undefined);
   }
   await Promise.all([
-    ownerConnected ? ownerSession.end().catch(() => undefined) : undefined,
-    borrowerConnected
-      ? borrowerSession.end().catch(() => undefined)
-      : undefined,
+    firstConnected ? firstSession.end().catch(() => undefined) : undefined,
+    secondConnected ? secondSession.end().catch(() => undefined) : undefined,
     observerConnected ? observer.end().catch(() => undefined) : undefined,
   ]);
 }

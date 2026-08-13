@@ -896,13 +896,245 @@ describe("ItemSection", () => {
     );
     expect(
       await screen.findByRole("heading", {
-        name: "Returned transaction history",
+        name: "Transaction history",
       }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Status: Returned")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /handed over|returned/ }),
     ).toBeNull();
+  });
+
+  it("shows cancellation only for eligible booking participants and states", async () => {
+    rpc.mockImplementation((name: string) =>
+      Promise.resolve({
+        data:
+          name === "list_booking_requests"
+            ? [
+                {
+                  id: "borrower-requested",
+                  item_id: "item-a",
+                  item_name: "Requested drill",
+                  start_date: "2026-09-01",
+                  end_date: "2026-09-01",
+                  status: "requested",
+                  is_borrower: true,
+                  is_item_owner: false,
+                  can_decide: false,
+                  borrower_label: "You",
+                },
+                {
+                  id: "borrower-accepted",
+                  item_id: "item-b",
+                  item_name: "Accepted sander",
+                  start_date: "2026-09-02",
+                  end_date: "2026-09-02",
+                  status: "accepted",
+                  is_borrower: true,
+                  is_item_owner: false,
+                  can_decide: false,
+                  borrower_label: "You",
+                },
+                {
+                  id: "owner-requested",
+                  item_id: "item-c",
+                  item_name: "Owner saw",
+                  start_date: "2026-09-03",
+                  end_date: "2026-09-03",
+                  status: "requested",
+                  is_borrower: false,
+                  is_item_owner: true,
+                  can_decide: true,
+                  borrower_label: "Community member",
+                },
+                {
+                  id: "owner-accepted",
+                  item_id: "item-d",
+                  item_name: "Owner plane",
+                  start_date: "2026-09-04",
+                  end_date: "2026-09-04",
+                  status: "accepted",
+                  is_borrower: false,
+                  is_item_owner: true,
+                  can_decide: false,
+                  borrower_label: "Community member",
+                },
+                {
+                  id: "admin-requested",
+                  item_id: "item-e",
+                  item_name: "Admin router",
+                  start_date: "2026-09-05",
+                  end_date: "2026-09-05",
+                  status: "requested",
+                  is_borrower: false,
+                  is_item_owner: false,
+                  can_decide: true,
+                  borrower_label: "Community member",
+                },
+                {
+                  id: "checked-out",
+                  item_id: "item-f",
+                  item_name: "Checked out level",
+                  start_date: "2026-09-06",
+                  end_date: "2026-09-06",
+                  status: "checked_out",
+                  is_borrower: true,
+                  is_item_owner: false,
+                  can_decide: false,
+                  borrower_label: "You",
+                },
+                {
+                  id: "cancelled",
+                  item_id: "item-g",
+                  item_name: "Cancelled clamp",
+                  start_date: "2026-09-07",
+                  end_date: "2026-09-07",
+                  status: "cancelled",
+                  is_borrower: true,
+                  is_item_owner: false,
+                  can_decide: false,
+                  borrower_label: "You",
+                },
+              ]
+            : [],
+        error: null,
+      }),
+    );
+    render(<ItemSection communities={[community]} currentUserId="member-a" />);
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Cancel reservation for Requested drill",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Cancel reservation for Accepted sander",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Cancel reservation for Owner plane",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /Cancel reservation for Owner saw/,
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: /Cancel reservation for Admin router/,
+      }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: /Cancel reservation for Checked out level/,
+      }),
+    ).toBeNull();
+    expect(screen.getByText("Status: Cancelled")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Transaction history" }),
+    ).toBeInTheDocument();
+  });
+
+  it("uses only the cancellation RPC once, refreshes, and announces success", async () => {
+    let status: "requested" | "cancelled" = "requested";
+    let finish: (() => void) | undefined;
+    rpc.mockImplementation((name: string, parameters?: unknown) => {
+      if (name === "list_booking_requests")
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-09-01",
+              end_date: "2026-09-01",
+              status,
+              is_borrower: true,
+              is_item_owner: false,
+              can_decide: false,
+              borrower_label: "You",
+            },
+          ],
+          error: null,
+        });
+      if (name === "cancel_booking") {
+        expect(parameters).toEqual({ target_booking_id: "booking-a" });
+        return new Promise((resolve) => {
+          finish = () => {
+            status = "cancelled";
+            resolve({ data: [], error: null });
+          };
+        });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(
+      <ItemSection communities={[community]} currentUserId="borrower-a" />,
+    );
+    const cancel = await screen.findByRole("button", {
+      name: "Cancel reservation for Drill",
+    });
+    fireEvent.click(cancel);
+    fireEvent.click(cancel);
+    expect(cancel).toBeDisabled();
+    expect(
+      rpc.mock.calls.filter(([name]) => name === "cancel_booking"),
+    ).toHaveLength(1);
+    finish?.();
+    expect(await screen.findByText("Status: Cancelled")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Reservation cancelled. It is preserved in your history.",
+      ),
+    ).toHaveAttribute("role", "status");
+  });
+
+  it("announces a stale cancellation rejection and refreshes authoritative state", async () => {
+    let calls = 0;
+    rpc.mockImplementation((name: string) => {
+      if (name === "list_booking_requests") {
+        calls += 1;
+        return Promise.resolve({
+          data: [
+            {
+              id: "booking-a",
+              item_id: "item-a",
+              item_name: "Drill",
+              start_date: "2026-09-01",
+              end_date: "2026-09-01",
+              status: calls === 1 ? "accepted" : "checked_out",
+              is_borrower: true,
+              is_item_owner: false,
+              can_decide: false,
+              borrower_label: "You",
+            },
+          ],
+          error: null,
+        });
+      }
+      if (name === "cancel_booking")
+        return Promise.resolve({
+          data: null,
+          error: new Error("Booking cannot be cancelled after handover"),
+        });
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(
+      <ItemSection communities={[community]} currentUserId="borrower-a" />,
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Cancel reservation for Drill",
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "cannot be cancelled after handover",
+    );
+    expect(screen.getByText("Status: Checked out")).toBeInTheDocument();
+    expect(calls).toBeGreaterThan(1);
   });
 
   it("offers phase-specific labelled condition evidence uploads", async () => {
