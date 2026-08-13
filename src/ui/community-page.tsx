@@ -31,6 +31,8 @@ export function CommunityPage() {
   const [message, setMessage] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
   const [pendingActions, setPendingActions] = useState<string[]>([]);
+  const [showPasswordResetRequest, setShowPasswordResetRequest] =
+    useState(false);
   const pendingActionsRef = useRef(new Set<string>());
 
   function beginAction(action: string): boolean {
@@ -138,6 +140,32 @@ export function CommunityPage() {
     }
   }
 
+  async function requestPasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    announce("");
+    if (!beginAction("request-password-reset")) return;
+    const email = String(
+      new FormData(event.currentTarget).get("reset-email") ?? "",
+    ).trim();
+    try {
+      const redirectTo = new URL("/reset-password", window.location.origin);
+      await getSupabaseBrowserClient().auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo.toString(),
+      });
+      announce(
+        "If an account exists for that email, a password reset link has been sent.",
+      );
+    } catch {
+      // Recovery failures can depend on account state (for example, rate limits).
+      // Keep the public response indistinguishable and do not log sensitive details.
+      announce(
+        "If an account exists for that email, a password reset link has been sent.",
+      );
+    } finally {
+      endAction("request-password-reset");
+    }
+  }
+
   async function runRpc(
     action: string,
     functionName: string,
@@ -191,7 +219,48 @@ export function CommunityPage() {
         >
           {message}
         </p>
-        {!authenticated ? (
+        {!authenticated && showPasswordResetRequest ? (
+          <section className="card" aria-labelledby="reset-request-title">
+            <h2 id="reset-request-title">Reset your password</h2>
+            <p>Enter your email address to receive a password reset link.</p>
+            <form
+              onSubmit={requestPasswordReset}
+              aria-describedby={
+                messageIsError ? "community-message" : undefined
+              }
+              aria-busy={isPending("request-password-reset")}
+            >
+              <label htmlFor="reset-email">Email address</label>
+              <input
+                id="reset-email"
+                name="reset-email"
+                type="email"
+                autoComplete="email"
+                required
+                autoFocus
+              />
+              <div className="actions">
+                <button
+                  type="submit"
+                  disabled={isPending("request-password-reset")}
+                >
+                  Send reset link
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={isPending("request-password-reset")}
+                  onClick={() => {
+                    announce("");
+                    setShowPasswordResetRequest(false);
+                  }}
+                >
+                  Back to sign in
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : !authenticated ? (
           <section className="card" aria-labelledby="sign-in-title">
             <h2 id="sign-in-title">Sign in</h2>
             <form
@@ -232,6 +301,17 @@ export function CommunityPage() {
                   Create account
                 </button>
               </div>
+              <button
+                type="button"
+                className="text-button"
+                disabled={isPending("authenticate")}
+                onClick={() => {
+                  announce("");
+                  setShowPasswordResetRequest(true);
+                }}
+              >
+                Forgot password?
+              </button>
             </form>
           </section>
         ) : (

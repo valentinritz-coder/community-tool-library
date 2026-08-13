@@ -53,6 +53,18 @@ deletion is intentionally not granted, so a published item cannot lose its requi
 
 ## Configuration boundaries
 
+### Password recovery redirects
+
+The sign-in screen asks Supabase Auth to send recovery links back to the fixed
+`/reset-password` application route on the browser's current origin. The local Auth allow-list in
+`supabase/config.toml` includes exact reset routes for the `127.0.0.1` and `localhost` development
+origins. Exercise links captured by the local email viewer at `http://127.0.0.1:54324`.
+
+For staging or production, add the exact HTTPS reset route (for example,
+`https://<approved-host>/reset-password`) to the hosted Supabase project's Redirect URLs and set its
+Site URL to the approved application origin. Do not use wildcard redirects or accept a redirect URL
+from application input. External SMTP remains intentionally unconfigured until issue #41.
+
 `.env.example` documents only browser-safe connection settings. Hosted values belong in the
 deployment secret manager and local values belong in ignored `.env.local`. Administrative database
 passwords and Supabase service-role keys are server-only credentials and are not required by this
