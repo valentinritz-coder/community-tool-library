@@ -210,8 +210,9 @@ export function ItemSection({
 
   async function createItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     announce("");
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     const price = paid ? priceToCents(String(form.get("price") ?? "")) : null;
     if (paid && price === null) {
       announce("Enter a daily price between 0.01 and 1000.00.", {
@@ -268,7 +269,7 @@ export function ItemSection({
         target_item_id: item.id,
       });
       if (published.error) throw published.error;
-      event.currentTarget.reset();
+      formElement.reset();
       setPaid(false);
       await refresh();
       setMessage("Item listed for your community.");

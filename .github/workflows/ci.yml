@@ -63,6 +63,27 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Configure local browser-safe Supabase values
+        run: |
+          eval "$(npx supabase status --output env)"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test critical browser journeys
+        run: npm run test:e2e
+
+      - name: Upload Playwright failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-diagnostics
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Stop local Supabase
         if: always()
         run: npm run supabase:stop
