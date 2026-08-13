@@ -99,23 +99,28 @@ test.describe.serial("critical MVP journeys", () => {
     browser,
   }) => {
     const owner = await signIn(browser, "demo-owner@example.test");
-    await owner.page.getByLabel("Item name", { exact: true }).fill(itemName);
-    await owner.page
+    const createItemForm = owner.page
+      .getByRole("button", { name: "List item" })
+      .locator("..");
+    await createItemForm
+      .getByLabel("Item name", { exact: true })
+      .fill(itemName);
+    await createItemForm
       .getByLabel("Item category", { exact: true })
       .selectOption("small_diy");
-    await owner.page
+    await createItemForm
       .getByLabel("Short description", { exact: true })
       .fill("Synthetic low-risk screwdriver for the Playwright critical path.");
-    await owner.page.getByLabel(/Item photo/).setInputFiles(itemPhoto);
-    await owner.page.getByRole("button", { name: "List item" }).click();
+    await createItemForm.getByLabel(/Item photo/).setInputFiles(itemPhoto);
+    await createItemForm.getByRole("button", { name: "List item" }).click();
     await expect(
       owner.page.getByText("Item listed for your community."),
     ).toBeVisible();
 
-    const ownedItem = owner.page
-      .locator("article")
-      .filter({ has: owner.page.getByRole("heading", { name: itemName }) })
-      .last();
+    const ownedItem = owner.page.locator("article").filter({
+      has: owner.page.getByRole("heading", { name: itemName, exact: true }),
+    });
+    await expect(ownedItem).toHaveCount(1);
     await ownedItem.getByLabel("Start date (included)").fill(dateFromToday(20));
     await ownedItem.getByLabel("End date (included)").fill(dateFromToday(22));
     await ownedItem
