@@ -11,13 +11,14 @@ end $$;
 
 insert into auth.users
   (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at,
-   raw_app_meta_data, raw_user_meta_data)
+   raw_app_meta_data, raw_user_meta_data, confirmation_token, recovery_token, email_change,
+   email_change_token_new)
 values
-  ('d0000000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-admin@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
-  ('d0000000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-owner@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
-  ('d0000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-borrower@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
-  ('d0000000-0000-4000-8000-000000000004','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-member@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
-  ('d0000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-pending@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}');
+  ('d0000000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-admin@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
+  ('d0000000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-owner@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
+  ('d0000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-borrower@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
+  ('d0000000-0000-4000-8000-000000000004','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-member@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
+  ('d0000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-pending@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','','');
 
 insert into auth.identities (id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
 select id, id::text, id, jsonb_build_object('sub', id::text, 'email', email), 'email', now(), now(), now()
@@ -29,8 +30,7 @@ insert into public.memberships (community_id,user_id,role,status,created_at) val
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001','admin','active',now()),
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','member','active',now()),
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000003','member','active',now()),
- ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000004','member','active',now()),
- ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000005','member','pending',now());
+ ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000004','member','active',now());
 
 insert into public.items (id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,photo_uploaded,created_at) values
  ('d2000000-0000-4000-8000-000000000001','d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','Compact drill','small_diy','Synthetic low-risk drill listing.','d2000000-0000-4000-8000-000000000001/photo.jpg',true,null,true,now()-interval '4 days'),
