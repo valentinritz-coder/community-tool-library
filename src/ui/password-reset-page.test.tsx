@@ -43,6 +43,17 @@ describe("PasswordResetPage", () => {
     expect(screen.getByLabelText("Confirm new password")).toBeInTheDocument();
   });
 
+  it("keeps checking briefly when the initial session arrives before recovery", () => {
+    render(<PasswordResetPage />);
+    authListener?.("INITIAL_SESSION");
+    expect(
+      screen.getByText("Checking your password reset link…"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Reset link unavailable"),
+    ).not.toBeInTheDocument();
+  });
+
   it("rejects mismatched confirmation without updating the user", async () => {
     openRecoveryForm();
     fireEvent.change(await screen.findByLabelText("New password"), {
@@ -110,6 +121,29 @@ describe("PasswordResetPage", () => {
     expect(
       screen.getByRole("link", { name: "Return to sign in" }),
     ).toHaveAttribute("href", "/");
+  });
+
+  it("reports session cleanup failure without claiming the password update failed", async () => {
+    signOut.mockResolvedValue({ error: new Error("Sign out failed.") });
+    openRecoveryForm();
+    fireEvent.change(await screen.findByLabelText("New password"), {
+      target: { value: "new-password" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), {
+      target: { value: "new-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Your password was changed, but we could not end the recovery session.",
+    );
+    expect(updateUser).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("link", { name: "Return to sign in" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Try ending session again" }),
+    ).toBeInTheDocument();
   });
 
   it("fails safely when Supabase reports an invalid or expired link", async () => {

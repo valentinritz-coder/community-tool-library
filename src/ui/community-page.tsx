@@ -149,16 +149,18 @@ export function CommunityPage() {
     ).trim();
     try {
       const redirectTo = new URL("/reset-password", window.location.origin);
-      const { error } =
-        await getSupabaseBrowserClient().auth.resetPasswordForEmail(email, {
-          redirectTo: redirectTo.toString(),
-        });
-      if (error) throw error;
+      await getSupabaseBrowserClient().auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo.toString(),
+      });
       announce(
         "If an account exists for that email, a password reset link has been sent.",
       );
-    } catch (error) {
-      announce(errorMessage(error), true);
+    } catch {
+      // Recovery failures can depend on account state (for example, rate limits).
+      // Keep the public response indistinguishable and do not log sensitive details.
+      announce(
+        "If an account exists for that email, a password reset link has been sent.",
+      );
     } finally {
       endAction("request-password-reset");
     }

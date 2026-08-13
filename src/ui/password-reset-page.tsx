@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { getSupabaseBrowserClient } from "../infrastructure/supabase-browser";
@@ -19,8 +19,10 @@ export function PasswordResetPage() {
   const [checkingLink, setCheckingLink] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [cleanupFailed, setCleanupFailed] = useState(false);
   const [message, setMessage] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
+  const recoverySeenRef = useRef(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -36,18 +38,60 @@ export function PasswordResetPage() {
     }
 
     const supabase = getSupabaseBrowserClient();
+    let initialSessionTimer: ReturnType<typeof setTimeout> | undefined;
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
+        recoverySeenRef.current = true;
+        clearTimeout(initialSessionTimer);
         setRecoveryReady(true);
         setMessage("");
         setMessageIsError(false);
       }
-      if (event === "PASSWORD_RECOVERY" || event === "INITIAL_SESSION") {
+      if (event === "PASSWORD_RECOVERY") {
         setCheckingLink(false);
+      } else if (event === "INITIAL_SESSION") {
+        initialSessionTimer = setTimeout(() => {
+          if (!recoverySeenRef.current) setCheckingLink(false);
+        }, 100);
       }
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      clearTimeout(initialSessionTimer);
+      data.subscription.unsubscribe();
+    };
   }, []);
+
+  async function endRecoverySession() {
+    setSubmitting(true);
+    try {
+      const { error } = await getSupabaseBrowserClient().auth.signOut();
+      if (error) {
+        setCleanupFailed(true);
+        setComplete(false);
+        setRecoveryReady(false);
+        setMessage(
+          "Your password was changed, but we could not end the recovery session. Try ending the session again before signing in.",
+        );
+        setMessageIsError(true);
+        return;
+      }
+      setCleanupFailed(false);
+      setComplete(true);
+      setRecoveryReady(false);
+      setMessage("Your password has been changed. You can now sign in.");
+      setMessageIsError(false);
+    } catch {
+      setCleanupFailed(true);
+      setComplete(false);
+      setRecoveryReady(false);
+      setMessage(
+        "Your password was changed, but we could not end the recovery session. Try ending the session again before signing in.",
+      );
+      setMessageIsError(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function updatePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -75,11 +119,7 @@ export function PasswordResetPage() {
         password,
       });
       if (error) throw error;
-      await getSupabaseBrowserClient().auth.signOut();
-      setComplete(true);
-      setRecoveryReady(false);
-      setMessage("Your password has been changed. You can now sign in.");
-      setMessageIsError(false);
+      await endRecoverySession();
     } catch (error) {
       setMessage(safeErrorMessage(error));
       setMessageIsError(true);
@@ -147,16 +187,30 @@ export function PasswordResetPage() {
         ) : (
           <section className="card" aria-labelledby="link-error-title">
             <h2 id="link-error-title">
-              {complete ? "Password changed" : "Reset link unavailable"}
+              {complete
+                ? "Password changed"
+                : cleanupFailed
+                  ? "Password changed; session still active"
+                  : "Reset link unavailable"}
             </h2>
             {!message && !complete ? (
               <p>
                 This password reset link is invalid, expired, or already used.
               </p>
             ) : null}
-            <Link className="button-link" href="/">
-              {complete ? "Return to sign in" : "Request a new reset link"}
-            </Link>
+            {cleanupFailed ? (
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => void endRecoverySession()}
+              >
+                Try ending session again
+              </button>
+            ) : (
+              <Link className="button-link" href="/">
+                {complete ? "Return to sign in" : "Request a new reset link"}
+              </Link>
+            )}
           </section>
         )}
       </main>

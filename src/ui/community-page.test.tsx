@@ -105,9 +105,11 @@ describe("CommunityPage", () => {
         { redirectTo: "http://localhost:3000/reset-password" },
       ),
     );
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "If an account exists for that email, a password reset link has been sent.",
-    );
+    expect(
+      await screen.findByText(
+        "If an account exists for that email, a password reset link has been sent.",
+      ),
+    ).toHaveAttribute("role", "status");
   });
 
   it("prevents duplicate password recovery requests while pending", async () => {
@@ -133,6 +135,26 @@ describe("CommunityPage", () => {
     expect(resetPasswordForEmail).toHaveBeenCalledTimes(1);
     resolveReset?.({ error: null });
     await waitFor(() => expect(button).not.toBeDisabled());
+  });
+
+  it("keeps the public response generic when Supabase rejects recovery", async () => {
+    resetPasswordForEmail.mockResolvedValue({
+      error: new Error("Recovery email rate limit exceeded."),
+    });
+    render(<CommunityPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "member@example.test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send reset link" }));
+
+    expect(
+      await screen.findByText(
+        "If an account exists for that email, a password reset link has been sent.",
+      ),
+    ).toHaveAttribute("role", "status");
+    expect(screen.queryByText(/rate limit/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("marks a community operation busy and prevents a duplicate request", async () => {
