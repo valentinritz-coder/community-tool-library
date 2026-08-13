@@ -117,9 +117,16 @@ test.describe.serial("critical MVP journeys", () => {
       owner.page.getByText("Item listed for your community."),
     ).toBeVisible();
 
-    const ownedItem = owner.page.locator("article").filter({
-      has: owner.page.getByRole("heading", { name: itemName, exact: true }),
-    });
+    const ownedItem = owner.page
+      .locator("article")
+      .filter({
+        has: owner.page.getByRole("heading", { name: itemName, exact: true }),
+      })
+      .filter({
+        has: owner.page.getByRole("button", {
+          name: "Add availability range",
+        }),
+      });
     await expect(ownedItem).toHaveCount(1);
     await ownedItem.getByLabel("Start date (included)").fill(dateFromToday(20));
     await ownedItem.getByLabel("End date (included)").fill(dateFromToday(22));
