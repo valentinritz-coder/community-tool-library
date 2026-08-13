@@ -12,6 +12,7 @@ const query = {
   eq: vi.fn().mockResolvedValue({ error: null }),
 };
 const rpc = vi.fn().mockResolvedValue({ data: [], error: null });
+const upload = vi.fn().mockResolvedValue({ error: null });
 
 const createSignedUrl = vi.fn((path: string) =>
   Promise.resolve({
@@ -27,7 +28,7 @@ vi.mock("../infrastructure/supabase-browser", () => ({
     storage: {
       from: vi.fn(() => ({
         createSignedUrl,
-        upload: vi.fn().mockResolvedValue({ error: null }),
+        upload,
       })),
     },
   }),
@@ -35,9 +36,11 @@ vi.mock("../infrastructure/supabase-browser", () => ({
 
 describe("ItemSection", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
     query.order.mockResolvedValue({ data: [], error: null });
     rpc.mockResolvedValue({ data: [], error: null });
+    upload.mockResolvedValue({ error: null });
   });
 
   const community = {
@@ -240,6 +243,76 @@ describe("ItemSection", () => {
     expect(
       screen.getByRole("button", { name: "List item" }),
     ).toBeInTheDocument();
+  });
+
+  it("completes asynchronous item creation and announces success", async () => {
+    const createdItem = {
+      id: "new-item",
+      community_id: community.id,
+      owner_id: "member-a",
+      name: "Compact screwdriver",
+      category: "small_diy",
+      description: "Synthetic low-risk item",
+      photo_path: "new-item/photo.png",
+      is_free: true,
+      price_per_day_cents: null,
+      archived: false,
+      photo_uploaded: false,
+    };
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_item") {
+        return Promise.resolve({ data: createdItem, error: null });
+      }
+      return Promise.resolve({ data: [], error: null });
+    });
+    render(<ItemSection communities={[community]} currentUserId="member-a" />);
+
+    fireEvent.change(screen.getByLabelText("Item name"), {
+      target: { value: createdItem.name },
+    });
+    fireEvent.change(screen.getByLabelText("Short description"), {
+      target: { value: createdItem.description },
+    });
+    fireEvent.change(screen.getByLabelText("Item category"), {
+      target: { value: "small_diy" },
+    });
+    const photo = new File(["synthetic image"], "item.png", {
+      type: "image/png",
+    });
+    const photoInput = screen.getByLabelText(/Item photo/);
+    const NativeFormData = FormData;
+    vi.stubGlobal(
+      "FormData",
+      class extends NativeFormData {
+        override get(name: string) {
+          return name === "photo" ? photo : super.get(name);
+        }
+      },
+    );
+    const form = photoInput.closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+
+    expect(
+      await screen.findByText("Item listed for your community."),
+    ).toHaveAttribute("role", "status");
+    expect(screen.queryByText(/Cannot read properties of null/)).toBeNull();
+    expect(rpc).toHaveBeenCalledWith("create_item", {
+      target_community_id: community.id,
+      item_name: createdItem.name,
+      item_category: "small_diy",
+      item_description: createdItem.description,
+      item_is_free: true,
+      item_price_per_day_cents: null,
+      photo_extension: "png",
+    });
+    expect(upload).toHaveBeenCalledWith(createdItem.photo_path, photo, {
+      contentType: "image/png",
+      upsert: false,
+    });
+    expect(rpc).toHaveBeenCalledWith("publish_item", {
+      target_item_id: createdItem.id,
+    });
   });
 
   it("associates a new-item price error with its field", async () => {
