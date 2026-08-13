@@ -10,6 +10,8 @@
     "lint": "node ./node_modules/eslint/bin/eslint.js .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "test:db-concurrency": "node scripts/test-booking-lifecycle-concurrency.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -29,6 +31,7 @@
     "react-dom": "19.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.0",
     "@types/node": "20.19.33",

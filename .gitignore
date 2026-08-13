@@ -7,6 +7,8 @@
 
 # test output
 /coverage
+/playwright-report
+/test-results
 
 # local environment files (the example remains tracked)
 .env*
