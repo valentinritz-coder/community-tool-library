@@ -121,9 +121,10 @@ npm run demo:local
 `demo:local` accepts only a loopback URL on local port 54322, refuses a second load, and verifies its
 expected counts. Its fixed UUIDs and `example.test` identities are synthetic; availability and booking
 dates are calculated from `current_date`. The common local-only password is `demo-local-only`.
-The dataset represents an admin, three active members, one pending member, four category/pricing
-listings, availability, requested/accepted/refused/checked-out/returned bookings, before/after
-condition metadata, and one open report. Photo paths/evidence records are representative database
+The dataset represents an admin, three active members, and one synthetic no-membership user reserved
+for exercising the join/approval flow, plus four category/pricing listings, availability,
+requested/accepted/refused/checked-out/returned bookings, before/after condition metadata, and one
+open report. Photo paths/evidence records are representative database
 metadata; the SQL does not install image binaries, so use synthetic uploads when exercising image
 rendering.
 
