@@ -155,6 +155,31 @@ button {
   color: var(--accent-dark);
 }
 
+.text-button {
+  background: transparent;
+  border: 0;
+  color: var(--accent-dark);
+  justify-self: start;
+  min-height: 2.75rem;
+  padding-inline: 0;
+  text-decoration: underline;
+}
+
+.button-link {
+  background: var(--accent);
+  border: 2px solid var(--accent-dark);
+  border-radius: 0.55rem;
+  color: white;
+  display: inline-flex;
+  font-weight: 700;
+  min-height: 2.9rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.reset-main {
+  max-width: 42rem;
+}
+
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,

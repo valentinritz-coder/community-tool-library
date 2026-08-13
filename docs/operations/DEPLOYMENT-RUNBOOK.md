@@ -48,6 +48,8 @@ Before deploying the frontend, verify the target project's hosted Auth settingsâ
 in `supabase/config.toml`â€”against the selected frontend domain: Site URL, every permitted redirect URL,
 whether pilot signup is enabled, and whether email confirmation is required/configured. Final values
 remain an environment/operator decision; local URLs must not be copied into hosted production settings.
+The exact HTTPS `<application-origin>/reset-password` URL must be in the hosted Auth redirect
+allow-list; the application constructs that fixed route from its current browser origin.
 
 Never use `supabase db reset` on a hosted production database. It is a destructive local
 reproducibility command, not a rollback mechanism.
