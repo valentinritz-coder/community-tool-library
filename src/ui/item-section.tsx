@@ -37,7 +37,7 @@ import {
 } from "../domain/moderation";
 
 interface ItemSectionProps {
-  communities: Community[];
+  communities: Pick<Community, "id" | "name" | "join_code">[];
   currentUserId: string;
   adminCommunityIds?: string[];
 }

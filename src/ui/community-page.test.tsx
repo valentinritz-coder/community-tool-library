@@ -8,6 +8,7 @@ const getSession = vi.fn();
 const signInWithPassword = vi.fn();
 const resetPasswordForEmail = vi.fn();
 const rpc = vi.fn();
+const membershipSelect = vi.fn().mockResolvedValue({ data: [], error: null });
 const communityQuery = {
   select: vi.fn(() => communityQuery),
   order: vi.fn().mockResolvedValue({ data: [], error: null }),
@@ -17,7 +18,7 @@ vi.mock("../infrastructure/supabase-browser", () => ({
     from: vi.fn((table: string) =>
       table === "memberships"
         ? {
-            select: vi.fn().mockResolvedValue({ data: [], error: null }),
+            select: membershipSelect,
           }
         : communityQuery,
     ),
@@ -43,6 +44,7 @@ describe("CommunityPage", () => {
     resetPasswordForEmail.mockResolvedValue({ error: null });
     rpc.mockResolvedValue({ error: null });
     communityQuery.order.mockResolvedValue({ data: [], error: null });
+    membershipSelect.mockResolvedValue({ data: [], error: null });
   });
 
   it("provides labelled authentication controls", async () => {
@@ -186,5 +188,48 @@ describe("CommunityPage", () => {
     expect(rpc).toHaveBeenCalledTimes(1);
     resolveRpc?.({ error: null });
     await waitFor(() => expect(button).not.toBeDisabled());
+  });
+
+  it("shows ownership and lets only the owner exercise an accessible appointment control", async () => {
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "owner-a" } } },
+    });
+    communityQuery.order.mockResolvedValue({
+      data: [
+        {
+          id: "community-a",
+          name: "Riverside",
+          join_code: "synthetic-code",
+          owner_id: "owner-a",
+          governance_state: "managed",
+        },
+      ],
+      error: null,
+    });
+    membershipSelect.mockResolvedValue({
+      data: [
+        {
+          community_id: "community-a",
+          user_id: "member-a",
+          role: "member",
+          status: "active",
+        },
+      ],
+      error: null,
+    });
+    render(<CommunityPage />);
+
+    expect(await screen.findByText("Community owner:")).toBeInTheDocument();
+    const appoint = screen.getByRole("button", {
+      name: "Appoint administrator member-a",
+    });
+    fireEvent.click(appoint);
+    await waitFor(() =>
+      expect(rpc).toHaveBeenCalledWith("set_appointed_administrator", {
+        target_community_id: "community-a",
+        target_user_id: "member-a",
+        appointed: true,
+      }),
+    );
   });
 });

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   canApproveMembership,
+  canManageAppointedAdministrator,
   type Community,
   type Membership,
 } from "../domain/community";
@@ -59,7 +60,10 @@ export function CommunityPage() {
   async function refresh() {
     const supabase = getSupabaseBrowserClient();
     const [communities, memberships] = await Promise.all([
-      supabase.from("communities").select("id,name,join_code").order("name"),
+      supabase
+        .from("communities")
+        .select("id,name,join_code,owner_id,governance_state")
+        .order("name"),
       supabase.from("memberships").select("community_id,user_id,role,status"),
     ]);
     if (communities.error) throw communities.error;
@@ -169,7 +173,7 @@ export function CommunityPage() {
   async function runRpc(
     action: string,
     functionName: string,
-    parameters: Record<string, string>,
+    parameters: Record<string, string | boolean>,
     success: string,
   ) {
     announce("");
@@ -383,6 +387,10 @@ export function CommunityPage() {
                       <span>
                         Join code: <code>{community.join_code}</code>
                       </span>
+                      <span>Governance: {community.governance_state}</span>
+                      <span>
+                        Community owner: <code>{community.owner_id}</code>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -401,10 +409,44 @@ export function CommunityPage() {
                       <span>
                         {membership.role} — {membership.status}
                       </span>
+                      {state.communities.map((community) =>
+                        canManageAppointedAdministrator(
+                          community,
+                          currentUserId,
+                          membership,
+                        ) ? (
+                          <button
+                            key={community.id}
+                            type="button"
+                            disabled={isPending(
+                              `admin-${membership.community_id}-${membership.user_id}`,
+                            )}
+                            onClick={() =>
+                              void runRpc(
+                                `admin-${membership.community_id}-${membership.user_id}`,
+                                "set_appointed_administrator",
+                                {
+                                  target_community_id: membership.community_id,
+                                  target_user_id: membership.user_id,
+                                  appointed: membership.role !== "admin",
+                                },
+                                membership.role === "admin"
+                                  ? "Appointed administrator removed."
+                                  : "Appointed administrator added.",
+                              )
+                            }
+                          >
+                            {membership.role === "admin"
+                              ? `Remove administrator ${membership.user_id}`
+                              : `Appoint administrator ${membership.user_id}`}
+                          </button>
+                        ) : null,
+                      )}
                       {canApproveMembership(
                         membership,
                         currentUserId,
                         state.memberships,
+                        state.communities,
                       ) && (
                         <button
                           type="button"
@@ -441,7 +483,18 @@ export function CommunityPage() {
                     membership.role === "admin" &&
                     membership.status === "active",
                 )
-                .map((membership) => membership.community_id)}
+                .map((membership) => membership.community_id)
+                .concat(
+                  state.communities
+                    .filter(
+                      (community) =>
+                        community.owner_id === currentUserId &&
+                        (community.governance_state === "managed" ||
+                          community.governance_state ===
+                            "democratic_preparation"),
+                    )
+                    .map((community) => community.id),
+                )}
             />
             <button
               type="button"
