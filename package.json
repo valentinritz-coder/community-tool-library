@@ -14,6 +14,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:db-concurrency": "node scripts/test-booking-lifecycle-concurrency.mjs",
     "test:election-concurrency": "node scripts/test-election-concurrency.mjs",
+    "test:governance-transfer-concurrency": "node scripts/test-governance-transfer-concurrency.mjs",
     "test:governance-migration": "node scripts/test-community-governance-migration.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

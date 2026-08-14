@@ -14,11 +14,11 @@ select '56100000-0000-4000-8000-000000000001',('56000000-0000-4000-8000-'||lpad(
 create temporary table cycles(label text primary key,id uuid,round_id uuid);
 grant select on table pg_temp.cycles to authenticated;
 insert into cycles values ('too-few',public.create_election_cycle('56100000-0000-4000-8000-000000000001',3),null);
-select throws_ok(format('select public.freeze_election_cycle(%L)',(select id from cycles where label='too-few')),'55000','At least three candidates are required','zero candidates cannot freeze');
+select throws_ok(format('select public.freeze_election_cycle(%L)',(select id from cycles where label='too-few')),'55000','At least three active candidates are required','zero candidates cannot freeze');
 insert into public.election_candidacies select (select id from cycles where label='too-few'),'56100000-0000-4000-8000-000000000001','56000000-0000-4000-8000-000000000001',now();
-select throws_ok(format('select public.freeze_election_cycle(%L)',(select id from cycles where label='too-few')),'55000','At least three candidates are required','one candidate cannot freeze');
+select throws_ok(format('select public.freeze_election_cycle(%L)',(select id from cycles where label='too-few')),'55000','At least three active candidates are required','one candidate cannot freeze');
 insert into public.election_candidacies select (select id from cycles where label='too-few'),'56100000-0000-4000-8000-000000000001','56000000-0000-4000-8000-000000000002',now();
-select throws_ok(format('select public.freeze_election_cycle(%L)',(select id from cycles where label='too-few')),'55000','At least three candidates are required','two candidates cannot freeze');
+select throws_ok(format('select public.freeze_election_cycle(%L)',(select id from cycles where label='too-few')),'55000','At least three active candidates are required','two candidates cannot freeze');
 delete from public.election_cycles where id=(select id from cycles where label='too-few');
 
 update cycles set id=public.create_election_cycle('56100000-0000-4000-8000-000000000001',5) where label='too-few';

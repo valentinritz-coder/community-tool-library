@@ -48,6 +48,9 @@ jobs:
       - name: Test concurrent election writes and finalization
         run: npm run test:election-concurrency
 
+      - name: Test concurrent governance transfer
+        run: npm run test:governance-transfer-concurrency
+
       - name: Reset before isolated demo validation
         run: npm run supabase:reset
 
