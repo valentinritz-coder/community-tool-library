@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canApproveMembership,
   canManageAppointedAdministrator,
+  hasManagedAdministrationAuthority,
   type Community,
   type Membership,
 } from "./community";
@@ -23,19 +24,32 @@ const pendingMember: Membership = {
 
 describe("canApproveMembership", () => {
   it("only offers approval to another active admin in the same community", () => {
-    expect(canApproveMembership(pendingMember, "admin", [admin])).toBe(true);
     expect(
-      canApproveMembership(pendingMember, "requester", [pendingMember]),
+      canApproveMembership(pendingMember, "admin", [admin], [community]),
+    ).toBe(true);
+    expect(
+      canApproveMembership(
+        pendingMember,
+        "requester",
+        [pendingMember],
+        [community],
+      ),
     ).toBe(false);
     expect(
-      canApproveMembership(pendingMember, "member", [
-        { ...admin, user_id: "member", role: "member" },
-      ]),
+      canApproveMembership(
+        pendingMember,
+        "member",
+        [{ ...admin, user_id: "member", role: "member" }],
+        [community],
+      ),
     ).toBe(false);
     expect(
-      canApproveMembership(pendingMember, "other-admin", [
-        { ...admin, community_id: "community-b", user_id: "other-admin" },
-      ]),
+      canApproveMembership(
+        pendingMember,
+        "other-admin",
+        [{ ...admin, community_id: "community-b", user_id: "other-admin" }],
+        [community],
+      ),
     ).toBe(false);
   });
 });
@@ -68,5 +82,23 @@ describe("managed governance controls", () => {
     expect(
       canManageAppointedAdministrator(community, "owner", pendingMember),
     ).toBe(false);
+  });
+
+  it("removes owner and appointed-admin managed authority after commitment", () => {
+    for (const governance_state of [
+      "democratic_transition",
+      "democratic",
+    ] as const) {
+      const transitioned = { ...community, governance_state };
+      expect(hasManagedAdministrationAuthority(transitioned, "owner", [])).toBe(
+        false,
+      );
+      expect(
+        hasManagedAdministrationAuthority(transitioned, "admin", [admin]),
+      ).toBe(false);
+      expect(
+        canApproveMembership(pendingMember, "admin", [admin], [transitioned]),
+      ).toBe(false);
+    }
   });
 });

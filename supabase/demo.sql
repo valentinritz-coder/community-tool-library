@@ -24,8 +24,8 @@ insert into auth.identities (id, provider_id, user_id, identity_data, provider, 
 select id, id::text, id, jsonb_build_object('sub', id::text, 'email', email), 'email', now(), now(), now()
 from auth.users where id::text like 'd0000000-0000-4000-8000-00000000000%';
 
-insert into public.communities (id, name, join_code, created_at) values
- ('d1000000-0000-4000-8000-000000000001','Example Test Tool Circle','d1000000-0000-4000-8000-000000000099',now());
+insert into public.communities (id, name, join_code, owner_id, governance_state, created_at) values
+ ('d1000000-0000-4000-8000-000000000001','Example Test Tool Circle','d1000000-0000-4000-8000-000000000099','d0000000-0000-4000-8000-000000000001','managed',now());
 insert into public.memberships (community_id,user_id,role,status,created_at) values
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001','admin','active',now()),
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','member','active',now()),

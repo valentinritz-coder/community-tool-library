@@ -33,6 +33,9 @@ jobs:
       - name: Start local Supabase
         run: npm run supabase:start
 
+      - name: Test community governance migration backfill
+        run: npm run test:governance-migration
+
       - name: Reapply Supabase migrations
         run: npm run supabase:reset
 

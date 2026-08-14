@@ -9,9 +9,9 @@ insert into auth.users (id, instance_id, aud, role, email, encrypted_password) v
   ('80000000-0000-4000-8000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'outsider@example.test', ''),
   ('80000000-0000-4000-8000-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'cross@example.test', ''),
   ('80000000-0000-4000-8000-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'other-owner@example.test', '');
-insert into public.communities (id, name) values
-  ('81000000-0000-4000-8000-000000000001', 'Booking community'),
-  ('81000000-0000-4000-8000-000000000002', 'Other booking community');
+insert into public.communities (id, name, owner_id) values
+  ('81000000-0000-4000-8000-000000000001', 'Booking community', '80000000-0000-4000-8000-000000000001'),
+  ('81000000-0000-4000-8000-000000000002', 'Other booking community', '80000000-0000-4000-8000-000000000005');
 insert into public.memberships (community_id, user_id, role, status) values
   ('81000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000001', 'member', 'active'),
   ('81000000-0000-4000-8000-000000000001', '80000000-0000-4000-8000-000000000002', 'member', 'active'),

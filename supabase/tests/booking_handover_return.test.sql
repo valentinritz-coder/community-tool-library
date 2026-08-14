@@ -9,9 +9,9 @@ insert into auth.users (id, instance_id, aud, role, email, encrypted_password) v
  ('b0000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','lifecycle-pending@example.test',''),
  ('b0000000-0000-4000-8000-000000000006','00000000-0000-0000-0000-000000000000','authenticated','authenticated','lifecycle-outsider@example.test',''),
  ('b0000000-0000-4000-8000-000000000007','00000000-0000-0000-0000-000000000000','authenticated','authenticated','lifecycle-cross-admin@example.test','');
-insert into public.communities(id,name) values
- ('b1000000-0000-4000-8000-000000000001','Lifecycle community'),
- ('b1000000-0000-4000-8000-000000000002','Other lifecycle community');
+insert into public.communities(id,name,owner_id) values
+ ('b1000000-0000-4000-8000-000000000001','Lifecycle community','b0000000-0000-4000-8000-000000000004'),
+ ('b1000000-0000-4000-8000-000000000002','Other lifecycle community','b0000000-0000-4000-8000-000000000007');
 insert into public.memberships values
  ('b1000000-0000-4000-8000-000000000001','b0000000-0000-4000-8000-000000000001','member','active',now()),
  ('b1000000-0000-4000-8000-000000000001','b0000000-0000-4000-8000-000000000002','member','active',now()),

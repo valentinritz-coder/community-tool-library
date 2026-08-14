@@ -1,13 +1,14 @@
 begin;
 
-select plan(39);
+select plan(41);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password)
 values
   ('54000000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'owner@example.test', ''),
   ('54000000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'member@example.test', ''),
   ('54000000-0000-4000-8000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'outsider@example.test', ''),
-  ('54000000-0000-4000-8000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'other-owner@example.test', '');
+  ('54000000-0000-4000-8000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'other-owner@example.test', ''),
+  ('54000000-0000-4000-8000-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'later-member@example.test', '');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '54000000-0000-4000-8000-000000000001', true);
@@ -57,6 +58,13 @@ select ok(public.is_community_owner((select id from governed)), 'removing delega
 select is((select role::text from public.memberships where community_id = (select id from governed) and user_id = auth.uid()), 'member', 'removal changes role only');
 select is((select status::text from public.memberships where community_id = (select id from governed) and user_id = auth.uid()), 'active', 'removal preserves active membership');
 select ok(public.has_managed_administration_authority((select id from governed)), 'owner administers managed community without admin role');
+set local role postgres;
+insert into public.memberships (community_id, user_id, role, status)
+values ((select id from governed), '54000000-0000-4000-8000-000000000005', 'member', 'pending');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '54000000-0000-4000-8000-000000000001', true);
+select lives_ok(format('select public.approve_membership(%L, %L)', (select id from governed), '54000000-0000-4000-8000-000000000005'), 'owner without admin delegation can approve membership');
+select is((select status::text from public.memberships where community_id = (select id from governed) and user_id = '54000000-0000-4000-8000-000000000005'), 'active', 'owner approval activates membership independently of admin role');
 select lives_ok(format('select public.set_appointed_administrator(%L, %L, false)', (select id from governed), '54000000-0000-4000-8000-000000000002'), 'owner removes appointed admin');
 select is((select count(*) from public.memberships where community_id = (select id from governed) and user_id = '54000000-0000-4000-8000-000000000002'), 1::bigint, 'admin removal does not delete membership');
 

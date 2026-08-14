@@ -13,9 +13,9 @@ insert into auth.users (id, instance_id, aud, role, email, encrypted_password) v
   ('90000000-0000-4000-8000-000000000008', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'decision-cross-admin@example.test', ''),
   ('90000000-0000-4000-8000-000000000009', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'decision-pending-member@example.test', '');
 
-insert into public.communities (id, name) values
-  ('91000000-0000-4000-8000-000000000001', 'Decision community'),
-  ('91000000-0000-4000-8000-000000000002', 'Cross decision community');
+insert into public.communities (id, name, owner_id) values
+  ('91000000-0000-4000-8000-000000000001', 'Decision community', '90000000-0000-4000-8000-000000000004'),
+  ('91000000-0000-4000-8000-000000000002', 'Cross decision community', '90000000-0000-4000-8000-000000000008');
 
 insert into public.memberships (community_id, user_id, role, status) values
   ('91000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-000000000001', 'member', 'active'),

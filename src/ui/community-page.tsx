@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   canApproveMembership,
   canManageAppointedAdministrator,
+  hasManagedAdministrationAuthority,
   type Community,
   type Membership,
 } from "../domain/community";
@@ -333,7 +334,7 @@ export function CommunityPage() {
                     "create-community",
                     "create_community",
                     { community_name: name },
-                    "Community created. You are its admin.",
+                    "Community created. You are its community owner.",
                   );
                 }}
               >
@@ -352,7 +353,10 @@ export function CommunityPage() {
             </section>
             <section className="card" aria-labelledby="join-title">
               <h2 id="join-title">Request to join</h2>
-              <p>An admin must approve your request.</p>
+              <p>
+                The community owner or an appointed administrator must approve
+                your request.
+              </p>
               <form
                 aria-busy={isPending("join-community")}
                 onSubmit={(event) => {
@@ -364,7 +368,7 @@ export function CommunityPage() {
                     "join-community",
                     "request_to_join_community",
                     { requested_join_code: code },
-                    "Request sent. An admin must approve it.",
+                    "Request sent. The community owner or an appointed administrator must approve it.",
                   );
                 }}
               >
@@ -476,25 +480,15 @@ export function CommunityPage() {
             <ItemSection
               communities={state.communities}
               currentUserId={currentUserId}
-              adminCommunityIds={state.memberships
-                .filter(
-                  (membership) =>
-                    membership.user_id === currentUserId &&
-                    membership.role === "admin" &&
-                    membership.status === "active",
+              adminCommunityIds={state.communities
+                .filter((community) =>
+                  hasManagedAdministrationAuthority(
+                    community,
+                    currentUserId,
+                    state.memberships,
+                  ),
                 )
-                .map((membership) => membership.community_id)
-                .concat(
-                  state.communities
-                    .filter(
-                      (community) =>
-                        community.owner_id === currentUserId &&
-                        (community.governance_state === "managed" ||
-                          community.governance_state ===
-                            "democratic_preparation"),
-                    )
-                    .map((community) => community.id),
-                )}
+                .map((community) => community.id)}
             />
             <button
               type="button"

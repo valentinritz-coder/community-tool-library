@@ -38,7 +38,9 @@ try {
       (select count(*)::int from public.items where community_id = 'd1000000-0000-4000-8000-000000000001') as items,
       (select count(*)::int from public.bookings b join public.items i on i.id = b.item_id where i.community_id = 'd1000000-0000-4000-8000-000000000001') as bookings,
       (select count(*)::int from public.condition_reports where booking_id = 'd4000000-0000-4000-8000-000000000004') as evidence,
-      (select count(*)::int from public.moderation_reports where community_id = 'd1000000-0000-4000-8000-000000000001') as reports
+      (select count(*)::int from public.moderation_reports where community_id = 'd1000000-0000-4000-8000-000000000001') as reports,
+      (select owner_id::text from public.communities where id = 'd1000000-0000-4000-8000-000000000001') as community_owner_id,
+      (select governance_state::text from public.communities where id = 'd1000000-0000-4000-8000-000000000001') as governance_state
   `);
   assert.deepEqual(result.rows[0], {
     communities: 1,
@@ -47,6 +49,8 @@ try {
     bookings: 5,
     evidence: 2,
     reports: 1,
+    community_owner_id: "d0000000-0000-4000-8000-000000000001",
+    governance_state: "managed",
   });
   console.log(
     "Local synthetic demo loaded and verified (1 community, 4 memberships, 4 items, 5 bookings, 2 evidence records, 1 report).",

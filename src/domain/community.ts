@@ -14,15 +14,35 @@ export interface Community {
   governance_state: CommunityGovernanceState;
 }
 
+export function hasManagedAdministrationAuthority(
+  community: Community,
+  currentUserId: string,
+  memberships: Membership[],
+): boolean {
+  const managedAdministrationIsActive =
+    community.governance_state === "managed" ||
+    community.governance_state === "democratic_preparation";
+
+  return (
+    managedAdministrationIsActive &&
+    (community.owner_id === currentUserId ||
+      memberships.some(
+        (membership) =>
+          membership.community_id === community.id &&
+          membership.user_id === currentUserId &&
+          membership.role === "admin" &&
+          membership.status === "active",
+      ))
+  );
+}
+
 export function canManageAppointedAdministrator(
   community: Community,
   currentUserId: string,
   membership: Membership,
 ): boolean {
   return (
-    community.owner_id === currentUserId &&
-    (community.governance_state === "managed" ||
-      community.governance_state === "democratic_preparation") &&
+    hasManagedAdministrationAuthority(community, currentUserId, []) &&
     membership.community_id === community.id &&
     membership.status === "active"
   );
@@ -39,7 +59,7 @@ export function canApproveMembership(
   membership: Membership,
   currentUserId: string,
   memberships: Membership[],
-  communities: Community[] = [],
+  communities: Community[],
 ): boolean {
   if (membership.status !== "pending" || membership.user_id === currentUserId) {
     return false;
@@ -48,19 +68,7 @@ export function canApproveMembership(
   const community = communities.find(
     (candidate) => candidate.id === membership.community_id,
   );
-  const managedOwner =
-    community?.owner_id === currentUserId &&
-    (community.governance_state === "managed" ||
-      community.governance_state === "democratic_preparation");
-
-  return (
-    managedOwner ||
-    memberships.some(
-      (candidate) =>
-        candidate.community_id === membership.community_id &&
-        candidate.user_id === currentUserId &&
-        candidate.role === "admin" &&
-        candidate.status === "active",
-    )
-  );
+  return community
+    ? hasManagedAdministrationAuthority(community, currentUserId, memberships)
+    : false;
 }
