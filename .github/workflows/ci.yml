@@ -45,6 +45,9 @@ jobs:
       - name: Test concurrent booking lifecycle transitions
         run: npm run test:db-concurrency
 
+      - name: Test concurrent election writes and finalization
+        run: npm run test:election-concurrency
+
       - name: Reset before isolated demo validation
         run: npm run supabase:reset
 
