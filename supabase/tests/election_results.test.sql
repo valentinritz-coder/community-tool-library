@@ -12,6 +12,7 @@ select '56100000-0000-4000-8000-000000000001',('56000000-0000-4000-8000-'||lpad(
  'member','active' from generate_series(1,8)n;
 
 create temporary table cycles(label text primary key,id uuid,round_id uuid);
+grant select on table pg_temp.cycles to authenticated;
 insert into cycles values ('too-few',public.create_election_cycle('56100000-0000-4000-8000-000000000001',3),null);
 select throws_ok(format('select public.freeze_election_cycle(%L)',(select id from cycles where label='too-few')),'55000','At least three candidates are required','zero candidates cannot freeze');
 insert into public.election_candidacies select (select id from cycles where label='too-few'),'56100000-0000-4000-8000-000000000001','56000000-0000-4000-8000-000000000001',now();

@@ -19,6 +19,7 @@ insert into public.memberships values
  ('55100000-0000-4000-8000-000000000002','55000000-0000-4000-8000-000000000024','admin','active',now());
 
 create temporary table ids(cycle uuid, round uuid);
+grant select on table pg_temp.ids to authenticated;
 insert into ids(cycle) values(public.create_election_cycle('55100000-0000-4000-8000-000000000001',3));
 set local role authenticated;
 select set_config('request.jwt.claim.sub','55000000-0000-4000-8000-000000000001',true);
