@@ -98,20 +98,50 @@ $$;
 -- Every established ordinary-administration caller now resolves authority by governance state.
 create or replace function public.is_active_community_admin(target_community_id uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
-  select case c.governance_state
-    when 'managed' then c.owner_id = auth.uid() or public.is_active_appointed_admin(c.id)
-    when 'democratic_preparation' then c.owner_id = auth.uid() or public.is_active_appointed_admin(c.id)
-    when 'democratic_transition' then public.is_active_appointed_admin(c.id)
-    when 'democratic' then public.has_elected_council_authority(c.id)
-    else false
-  end
-  from public.communities c where c.id = target_community_id;
+  select auth.uid() is not null and exists (
+    select 1 from public.communities c
+    where c.id = target_community_id
+      and case c.governance_state
+        when 'managed' then c.owner_id = auth.uid() or public.is_active_appointed_admin(c.id)
+        when 'democratic_preparation' then c.owner_id = auth.uid() or public.is_active_appointed_admin(c.id)
+        when 'democratic_transition' then public.is_active_appointed_admin(c.id)
+        when 'democratic' then public.has_elected_council_authority(c.id)
+        else false
+      end
+  );
 $$;
 
 revoke all on function public.has_elected_council_authority(uuid) from public;
 revoke all on function public.has_temporary_caretaker_authority(uuid) from public;
 grant execute on function public.has_elected_council_authority(uuid),
   public.has_temporary_caretaker_authority(uuid) to authenticated;
+
+-- Only candidacies backed by active membership at the authoritative snapshot instant are frozen.
+-- The inserted snapshot and its row count are the same set, so stale candidacies cannot satisfy
+-- the constitutional minimum.
+create or replace function public.freeze_election_cycle(target_cycle_id uuid)
+returns uuid language plpgsql security definer set search_path = '' as $$
+declare c public.election_cycles; candidate_count integer; electorate_count integer; round_id uuid;
+begin
+  select * into c from public.election_cycles where id=target_cycle_id for update;
+  if c.id is null or c.status<>'candidacy' then raise exception 'Election cycle cannot be frozen' using errcode='55000'; end if;
+  perform 1 from public.memberships where community_id=c.community_id and status='active' order by user_id for share;
+  insert into public.election_candidates(cycle_id,community_id,candidate_id)
+    select ec.cycle_id,ec.community_id,ec.candidate_id from public.election_candidacies ec
+    join public.memberships m on m.community_id=ec.community_id and m.user_id=ec.candidate_id and m.status='active'
+    where ec.cycle_id=c.id;
+  get diagnostics candidate_count = row_count;
+  if candidate_count<3 then raise exception 'At least three active candidates are required' using errcode='55000'; end if;
+  insert into public.election_electorate(cycle_id,community_id,voter_id)
+    select c.id,c.community_id,m.user_id from public.memberships m where m.community_id=c.community_id and m.status='active';
+  get diagnostics electorate_count = row_count;
+  update public.election_cycles set status='voting',frozen_at=now() where id=c.id;
+  insert into public.election_rounds(cycle_id,round_number,seats_available,electorate_count,quorum_threshold)
+    values(c.id,1,c.target_seats,electorate_count,public.election_quorum_threshold(electorate_count)) returning id into round_id;
+  insert into public.election_round_candidates(round_id,candidate_id)
+    select round_id,candidate_id from public.election_candidates where cycle_id=c.id;
+  return round_id;
+end $$;
 
 create function public.begin_democratic_preparation(target_community_id uuid, requested_seats integer)
 returns uuid language plpgsql security definer set search_path = '' as $$
@@ -219,6 +249,25 @@ begin
   return council_id;
 end $$;
 
+-- Internal platform/scheduler boundary: deterministically close and finalize through #55, then
+-- install only a completed founding result. Community and browser roles receive no EXECUTE.
+create function public.finalize_foundation_round(target_round_id uuid)
+returns public.election_round_status language plpgsql security definer set search_path = '' as $$
+declare result public.election_round_status; cycle_id uuid; community_id uuid;
+begin
+  select ec.id,ec.community_id into cycle_id,community_id
+  from public.election_rounds er
+  join public.election_cycles ec on ec.id=er.cycle_id
+  join public.communities c on c.id=ec.community_id
+    and c.governance_state='democratic_transition' and c.active_election_cycle_id=ec.id
+  where er.id=target_round_id for update of er,ec,c;
+  if cycle_id is null then raise exception 'Election round not found' using errcode='P0002'; end if;
+  perform public.close_election_round(target_round_id);
+  result := public.finalize_election_round(target_round_id);
+  if result='completed' then perform public.install_elected_council(community_id,cycle_id); end if;
+  return result;
+end $$;
+
 -- Serialize appointment changes with commitment; authority is rechecked under the same row lock.
 create or replace function public.set_appointed_administrator(target_community_id uuid,target_user_id uuid,appointed boolean)
 returns public.memberships language plpgsql security definer set search_path = '' as $$
@@ -240,6 +289,7 @@ revoke all on function public.cancel_democratic_preparation(uuid) from public;
 revoke all on function public.commit_democratic_transfer(uuid) from public;
 revoke all on function public.open_transition_retry_cycle(uuid) from public;
 revoke all on function public.install_elected_council(uuid,uuid) from public;
+revoke all on function public.finalize_foundation_round(uuid) from public;
 grant execute on function public.begin_democratic_preparation(uuid,integer),
   public.change_preparation_council_target(uuid,integer),
   public.cancel_democratic_preparation(uuid), public.commit_democratic_transfer(uuid),
