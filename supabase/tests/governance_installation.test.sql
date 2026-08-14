@@ -1,5 +1,5 @@
 begin;
-select plan(24);
+select plan(26);
 
 insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
 select ('57000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
@@ -58,6 +58,12 @@ select throws_ok($$select public.install_elected_council('57100000-0000-4000-800
  '55000','Community cannot install a council','second installation is rejected exactly once');
 select is((select count(*) from public.elected_council_mandates where community_id='57100000-0000-4000-8000-000000000006'),5::bigint,'five final winners produce exactly five mandates');
 select is((select count(*) from public.elected_council_mandates m join public.election_winners w on w.cycle_id=m.source_cycle_id and w.candidate_id=m.member_id where m.community_id='57100000-0000-4000-8000-000000000006'),5::bigint,'every mandate has final election-winner provenance');
+select is((select count(*) from pg_constraint con join pg_class rel on rel.oid=con.conrelid
+  where rel.oid='public.elected_council_mandates'::regclass and con.contype='u'
+    and pg_get_constraintdef(con.oid) like '%community_id, member_id%'),0::bigint,
+  'mandate history permits the same member in a later council');
+select ok(has_function_privilege('service_role','public.finalize_foundation_round(uuid)','EXECUTE'),
+  'trusted platform service role can invoke founding finalization');
 
 -- Fixture 4 elected owner, former appointed admin, and ordinary member; users 4/5 remain unelected.
 set local role authenticated;

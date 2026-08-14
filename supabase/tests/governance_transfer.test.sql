@@ -95,7 +95,7 @@ insert into public.election_candidacies(cycle_id,community_id,candidate_id)
 select c.active_election_cycle_id,c.id,u from public.communities c,
  unnest(array['56000000-0000-4000-8000-000000000001'::uuid,'56000000-0000-4000-8000-000000000002','56000000-0000-4000-8000-000000000003'])u
 where c.id='56100000-0000-4000-8000-000000000004';
-update public.memberships set status='inactive' where community_id='56100000-0000-4000-8000-000000000004' and user_id='56000000-0000-4000-8000-000000000003';
+update public.memberships set status='pending' where community_id='56100000-0000-4000-8000-000000000004' and user_id='56000000-0000-4000-8000-000000000003';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000009',true);
 select throws_ok($$select public.commit_democratic_transfer('56100000-0000-4000-8000-000000000004')$$,
@@ -122,6 +122,7 @@ select is((select count(*) from public.election_electorate where cycle_id=(selec
 select is((select count(*) from public.election_candidates where cycle_id=(select active_election_cycle_id from public.communities where id='56100000-0000-4000-8000-000000000001')),3::bigint,'authoritative candidates are frozen');
 create temporary table founding_round as select er.id from public.election_rounds er join public.communities c on c.active_election_cycle_id=er.cycle_id where c.id='56100000-0000-4000-8000-000000000001';
 grant select on founding_round to authenticated;
+grant select on founding_round to service_role;
 set local role authenticated;
 select throws_ok($$select public.cancel_democratic_preparation('56100000-0000-4000-8000-000000000001')$$,
  '55000','Democratic transfer can no longer be cancelled','cancel after commitment is rejected');
@@ -139,8 +140,9 @@ select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000002'
 select lives_ok($$select public.submit_election_ballot((select id from founding_round),array['56000000-0000-4000-8000-000000000003'::uuid,'56000000-0000-4000-8000-000000000004','56000000-0000-4000-8000-000000000005'])$$,'second elector votes');
 select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000003',true);
 select lives_ok($$select public.submit_election_ballot((select id from founding_round),array['56000000-0000-4000-8000-000000000003'::uuid,'56000000-0000-4000-8000-000000000004','56000000-0000-4000-8000-000000000005'])$$,'third elector votes');
-set local role postgres;
+set local role service_role;
 select is((select public.finalize_foundation_round((select id from founding_round))::text),'completed','successful finalization installs council in authoritative boundary');
+set local role postgres;
 select is((select governance_state::text from public.communities where id='56100000-0000-4000-8000-000000000001'),'democratic','installation atomically enters democratic state');
 select is((select count(*) from public.elected_council_mandates where community_id='56100000-0000-4000-8000-000000000001'),3::bigint,'exactly three final mandates are materialized');
 select is((select nominal_term_ends_at=took_office_at+interval '12 months' from public.elected_councils where community_id='56100000-0000-4000-8000-000000000001'),true,'mandate records constitutional nominal term');
@@ -181,14 +183,16 @@ select lives_ok($$select public.commit_democratic_transfer('56100000-0000-4000-8
 set local role postgres;
 create temporary table insufficient_round as select er.id from public.election_rounds er join public.communities c on c.active_election_cycle_id=er.cycle_id where c.id='56100000-0000-4000-8000-000000000005';
 grant select on insufficient_round to authenticated;
+grant select on insufficient_round to service_role;
 set local role authenticated;
 select lives_ok($$select public.submit_election_ballot((select id from insufficient_round),array['56000000-0000-4000-8000-000000000001'::uuid,'56000000-0000-4000-8000-000000000002'])$$,'insufficient result first ballot');
 select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000002',true);
 select lives_ok($$select public.submit_election_ballot((select id from insufficient_round),array['56000000-0000-4000-8000-000000000001'::uuid,'56000000-0000-4000-8000-000000000002'])$$,'insufficient result second ballot');
 select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000003',true);
 select lives_ok($$select public.submit_election_ballot((select id from insufficient_round),array['56000000-0000-4000-8000-000000000001'::uuid,'56000000-0000-4000-8000-000000000002'])$$,'insufficient result third ballot');
-set local role postgres;
+set local role service_role;
 select is((select public.finalize_foundation_round((select id from insufficient_round))::text),'insufficient_winners','fewer than three electable winners is terminal failure');
+set local role postgres;
 select is((select governance_state::text from public.communities where id='56100000-0000-4000-8000-000000000005'),'democratic_transition','insufficient winners preserve democratic transition');
 
 select * from finish();

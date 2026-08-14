@@ -29,6 +29,10 @@ async function asUser(client, user = users[0]) {
     user,
   ]);
 }
+async function asPlatform(client) {
+  await client.query("begin");
+  await client.query("set local role service_role");
+}
 async function waitForLock(observer, pid, fragment) {
   for (let attempt = 0; attempt < 200; attempt++) {
     const result = await observer.query(
@@ -277,6 +281,49 @@ try {
     1,
   );
 
+  // G. Platform finalization failure vs member retry follows community -> cycle -> round locks.
+  const finalizeRetryRace = await prepare(observer, first, 8);
+  await asUser(first);
+  const failedRound = (
+    await first.query("select public.commit_democratic_transfer($1) round_id", [
+      finalizeRetryRace.community,
+    ])
+  ).rows[0].round_id;
+  await first.query("commit");
+  await asPlatform(first);
+  const failure = await first.query(
+    "select public.finalize_foundation_round($1)::text status",
+    [failedRound],
+  );
+  assert.equal(failure.rows[0].status, "failed_quorum");
+  await asUser(second, users[1]);
+  const retryAfterFinalization = second.query(
+    "select public.open_transition_retry_cycle($1) cycle_id",
+    [finalizeRetryRace.community],
+  );
+  await waitForLock(observer, secondPid, "open_transition_retry_cycle");
+  await first.query("commit");
+  await retryAfterFinalization;
+  await second.query("commit");
+  assert.equal(
+    (
+      await observer.query(
+        "select count(*)::int n from public.election_cycles where community_id=$1 and status='candidacy'",
+        [finalizeRetryRace.community],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await observer.query(
+        "select status::text from public.election_cycles where id=$1",
+        [finalizeRetryRace.cycle],
+      )
+    ).rows[0].status,
+    "failed",
+  );
+
   // D. concurrent installation materializes one council and one copy of each mandate.
   await observer.query(
     "update public.election_cycles set status='completed',completed_at=now() where id=$1",
@@ -320,7 +367,7 @@ try {
     3,
   );
   console.log(
-    "Governance transfer concurrency tests passed: commit/cancel/target/candidacy/retry/install races serialize deterministically.",
+    "Governance transfer concurrency tests passed: commit/cancel/target/candidacy/finalize/retry/install races serialize deterministically.",
   );
 } finally {
   await first.query("rollback").catch(() => {});

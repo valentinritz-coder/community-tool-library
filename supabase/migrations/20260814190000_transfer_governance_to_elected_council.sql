@@ -60,7 +60,6 @@ create table public.elected_council_mandates (
   nominal_term_ends_at timestamptz not null,
   provenance text not null default 'election_winner' check (provenance = 'election_winner'),
   primary key (council_id, member_id),
-  unique (community_id, member_id),
   foreign key (community_id, member_id) references public.memberships(community_id, user_id),
   foreign key (source_cycle_id, member_id) references public.election_winners(cycle_id, candidate_id),
   check (nominal_term_ends_at = took_office_at + interval '12 months')
@@ -253,18 +252,25 @@ end $$;
 -- install only a completed founding result. Community and browser roles receive no EXECUTE.
 create function public.finalize_foundation_round(target_round_id uuid)
 returns public.election_round_status language plpgsql security definer set search_path = '' as $$
-declare result public.election_round_status; cycle_id uuid; community_id uuid;
+declare result public.election_round_status; r public.election_rounds; cycle public.election_cycles; c public.communities;
 begin
-  select ec.id,ec.community_id into cycle_id,community_id
-  from public.election_rounds er
-  join public.election_cycles ec on ec.id=er.cycle_id
-  join public.communities c on c.id=ec.community_id
-    and c.governance_state='democratic_transition' and c.active_election_cycle_id=ec.id
-  where er.id=target_round_id for update of er,ec,c;
-  if cycle_id is null then raise exception 'Election round not found' using errcode='P0002'; end if;
+  -- Discover identifiers without locks, then acquire every authoritative row in the lifecycle's
+  -- global order: community -> cycle -> round. Each relationship is revalidated under its lock.
+  select * into r from public.election_rounds where id=target_round_id;
+  if r.id is null then raise exception 'Election round not found' using errcode='P0002'; end if;
+  select * into cycle from public.election_cycles where id=r.cycle_id;
+  if cycle.id is null then raise exception 'Election cycle not found' using errcode='P0002'; end if;
+  select * into c from public.communities where id=cycle.community_id for update;
+  if c.id is null or c.governance_state<>'democratic_transition' or c.active_election_cycle_id<>cycle.id then
+    raise exception 'Election is not authoritative for democratic transition' using errcode='55000';
+  end if;
+  select * into cycle from public.election_cycles where id=cycle.id and community_id=c.id for update;
+  if cycle.id is null then raise exception 'Election cycle is inconsistent with community' using errcode='55000'; end if;
+  select * into r from public.election_rounds where id=target_round_id and cycle_id=cycle.id for update;
+  if r.id is null then raise exception 'Election round is inconsistent with cycle' using errcode='55000'; end if;
   perform public.close_election_round(target_round_id);
   result := public.finalize_election_round(target_round_id);
-  if result='completed' then perform public.install_elected_council(community_id,cycle_id); end if;
+  if result='completed' then perform public.install_elected_council(c.id,cycle.id); end if;
   return result;
 end $$;
 
@@ -290,6 +296,7 @@ revoke all on function public.commit_democratic_transfer(uuid) from public;
 revoke all on function public.open_transition_retry_cycle(uuid) from public;
 revoke all on function public.install_elected_council(uuid,uuid) from public;
 revoke all on function public.finalize_foundation_round(uuid) from public;
+grant execute on function public.finalize_foundation_round(uuid) to service_role;
 grant execute on function public.begin_democratic_preparation(uuid,integer),
   public.change_preparation_council_target(uuid,integer),
   public.cancel_democratic_preparation(uuid), public.commit_democratic_transfer(uuid),
