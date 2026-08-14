@@ -68,8 +68,8 @@ select throws_ok(format('select public.submit_election_ballot(%L,array[]::uuid[]
 select set_config('request.jwt.claim.sub','55000000-0000-4000-8000-000000000005',true);
 select lives_ok(format('select public.submit_election_ballot(%L,array[%L::uuid,%L::uuid,%L::uuid])',(select round from ids),'55000000-0000-4000-8000-000000000001','55000000-0000-4000-8000-000000000002','55000000-0000-4000-8000-000000000003'),'third ballot reaches quorum');
 select throws_ok(format('select public.finalize_election_round(%L)',(select round from ids)),'42501',null,'ordinary elector cannot finalize an open round');
-select is((select status::text from public.election_rounds where id=(select round from ids)),'voting','unauthorized finalization cannot cause failed quorum or close voting');
 set local role postgres;
+select is((select status::text from public.election_rounds where id=(select round from ids)),'voting','unauthorized finalization cannot cause failed quorum or close voting');
 select lives_ok(format('select public.close_election_round(%L)',(select round from ids)),'internal authority closes a genuinely finalizable round');
 select is(public.finalize_election_round((select round from ids))::text,'completed','deterministic top three completes the election');
 select is((select count(*) from public.election_winners where cycle_id=(select cycle from ids)),3::bigint,'three positive-score winners recorded');
