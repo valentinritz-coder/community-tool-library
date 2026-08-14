@@ -28,8 +28,7 @@ async function asUser(client, user) {
   ]);
 }
 
-async function waitForLock(observer, client, queryFragment) {
-  const pid = (await client.query("select pg_backend_pid() pid")).rows[0].pid;
+async function waitForLock(observer, pid, queryFragment) {
   for (let attempt = 0; attempt < 200; attempt++) {
     const result = await observer.query(
       "select wait_event_type from pg_stat_activity where pid=$1 and query like $2",
@@ -46,6 +45,10 @@ const observer = db("election-observer"),
   second = db("election-second");
 try {
   await Promise.all([observer.connect(), first.connect(), second.connect()]);
+  const firstPid = (await first.query("select pg_backend_pid() pid")).rows[0]
+    .pid;
+  const secondPid = (await second.query("select pg_backend_pid() pid")).rows[0]
+    .pid;
   await observer.query(
     `insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
     select x,'00000000-0000-0000-0000-000000000000','authenticated','authenticated',x||'@example.test','' from unnest($1::uuid[]) x`,
@@ -172,7 +175,7 @@ try {
     "select public.freeze_election_cycle($1) round_id",
     [candidacyCycle],
   );
-  await waitForLock(observer, second, "freeze_election_cycle");
+  await waitForLock(observer, secondPid, "freeze_election_cycle");
   await first.query("commit");
   const candidacyRound = (await freezeAfterCandidacy).rows[0].round_id;
   await second.query("commit");
@@ -189,14 +192,16 @@ try {
 
   // A ballot holding the round share lock commits before closure and is counted consistently.
   await asUser(first, ids.users[0]);
-  await first.query("select public.submit_election_ballot($1,array[]::uuid[])", [
-    candidacyRound,
-  ]);
+  await first.query(
+    "select public.submit_election_ballot($1,array[]::uuid[])",
+    [candidacyRound],
+  );
   await second.query("begin");
-  const closeAfterBallot = second.query("select public.close_election_round($1)", [
-    candidacyRound,
-  ]);
-  await waitForLock(observer, second, "close_election_round");
+  const closeAfterBallot = second.query(
+    "select public.close_election_round($1)",
+    [candidacyRound],
+  );
+  await waitForLock(observer, secondPid, "close_election_round");
   await first.query("commit");
   await closeAfterBallot;
   await second.query("commit");
@@ -212,7 +217,9 @@ try {
   );
 
   // Freeze owning the cycle lock wins over a later withdrawal; the snapshot stays coherent.
-  await observer.query("select public.finalize_election_round($1)", [candidacyRound]);
+  await observer.query("select public.finalize_election_round($1)", [
+    candidacyRound,
+  ]);
   const withdrawalCycle = (
     await observer.query(
       "insert into public.election_cycles(community_id,target_seats) values($1,3) returning id",
@@ -224,12 +231,17 @@ try {
     [withdrawalCycle, ids.community, ids.users],
   );
   await first.query("begin");
-  await first.query("select public.freeze_election_cycle($1)", [withdrawalCycle]);
+  await first.query("select public.freeze_election_cycle($1)", [
+    withdrawalCycle,
+  ]);
   await asUser(second, ids.users[3]);
   const lateWithdrawal = second
     .query("select public.withdraw_election_candidacy($1)", [withdrawalCycle])
-    .then(() => null, (error) => error);
-  await waitForLock(observer, second, "withdraw_election_candidacy");
+    .then(
+      () => null,
+      (error) => error,
+    );
+  await waitForLock(observer, secondPid, "withdraw_election_candidacy");
   await first.query("commit");
   assert.equal((await lateWithdrawal)?.code, "55000");
   await second.query("rollback");
@@ -244,8 +256,46 @@ try {
     "withdrawal after freeze cannot rewrite the candidate snapshot",
   );
 
+  // Closure owning the exclusive round lock wins over a late ballot. The ballot waits, then
+  // re-checks the committed status and is rejected without inserting anything.
+  const withdrawalRound = (
+    await observer.query(
+      "select id from public.election_rounds where cycle_id=$1 and round_number=1",
+      [withdrawalCycle],
+    )
+  ).rows[0].id;
+  await first.query("begin");
+  await first.query("select public.close_election_round($1)", [
+    withdrawalRound,
+  ]);
+  await asUser(second, ids.users[0]);
+  const lateBallot = second
+    .query("select public.submit_election_ballot($1,array[]::uuid[])", [
+      withdrawalRound,
+    ])
+    .then(
+      () => null,
+      (error) => error,
+    );
+  await waitForLock(observer, secondPid, "submit_election_ballot");
+  await first.query("commit");
+  const lateBallotError = await lateBallot;
+  assert.equal(lateBallotError?.code, "55000");
+  assert.match(lateBallotError?.message ?? "", /Voting is closed/);
+  await second.query("rollback");
+  assert.equal(
+    (
+      await observer.query(
+        "select count(*)::int n from public.election_ballots where round_id=$1",
+        [withdrawalRound],
+      )
+    ).rows[0].n,
+    0,
+    "closure committed first rejects the late ballot without inserting it",
+  );
+
   console.log(
-    "Concurrent election tests passed: freeze/candidacy, freeze/withdrawal, and ballot/closure serialize deterministically.",
+    `Concurrent election tests passed with backend PIDs ${firstPid}/${secondPid}: freeze/candidacy, freeze/withdrawal, and both ballot/closure orders serialize deterministically.`,
   );
 } finally {
   await first.query("rollback").catch(() => {});
