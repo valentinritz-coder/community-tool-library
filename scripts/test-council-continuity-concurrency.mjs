@@ -86,9 +86,15 @@ async function completedReconstitution(admin, id, winners) {
 
 const observer = db("continuity-observer"),
   first = db("continuity-first"),
-  second = db("continuity-second");
+  second = db("continuity-second"),
+  third = db("continuity-third");
 try {
-  await Promise.all([observer.connect(), first.connect(), second.connect()]);
+  await Promise.all([
+    observer.connect(),
+    first.connect(),
+    second.connect(),
+    third.connect(),
+  ]);
   const secondPid = (await second.query("select pg_backend_pid() pid")).rows[0]
     .pid;
   await observer.query(
@@ -139,6 +145,41 @@ try {
   ).rows[0];
   assert.deepEqual(state, { state: "democratic", active: 1 });
 
+  // Three committed resignations may safely leave a democratic council completely vacant.
+  const vacant = await fixture(observer, 7);
+  await Promise.all([
+    asUser(first, users[0]),
+    asUser(second, users[1]),
+    asUser(third, users[2]),
+  ]);
+  const resignFirst = first.query(
+    "select public.resign_elected_council_mandate($1)",
+    [vacant],
+  );
+  const resignSecond = second.query(
+    "select public.resign_elected_council_mandate($1)",
+    [vacant],
+  );
+  const resignThird = third.query(
+    "select public.resign_elected_council_mandate($1)",
+    [vacant],
+  );
+  await resignFirst;
+  await first.query("commit");
+  await resignSecond;
+  await second.query("commit");
+  await resignThird;
+  await third.query("commit");
+  assert.deepEqual(
+    (
+      await observer.query(
+        "select governance_state::text state,public.active_elected_mandate_count(id) active from public.communities where id=$1",
+        [vacant],
+      )
+    ).rows[0],
+    { state: "democratic", active: 0 },
+  );
+
   // Opening twice and resignation-vs-open both serialize on the community row.
   const opening = await fixture(observer, 3);
   await Promise.all([asUser(first, users[3]), asUser(second, users[4])]);
@@ -183,6 +224,18 @@ try {
     observer,
     installing,
     users.slice(1, 3),
+  );
+  const otherCommunity = await fixture(observer, 8, 1, 3);
+  assert.equal(
+    (
+      await rejected(
+        observer.query("select public.install_reconstitution_winners($1,$2)", [
+          otherCommunity,
+          cycle,
+        ]),
+      )
+    )?.code,
+    "55000",
   );
   await Promise.all([first.query("begin"), second.query("begin")]);
   await first.query("select public.install_reconstitution_winners($1,$2)", [
@@ -247,9 +300,18 @@ try {
   );
   console.log("Council continuity concurrency checks passed.");
 } finally {
-  await Promise.allSettled([first.query("rollback"), second.query("rollback")]);
+  await Promise.allSettled([
+    first.query("rollback"),
+    second.query("rollback"),
+    third.query("rollback"),
+  ]);
   await observer
     .query("delete from auth.users where id=any($1::uuid[])", [users])
     .catch(() => {});
-  await Promise.allSettled([observer.end(), first.end(), second.end()]);
+  await Promise.allSettled([
+    observer.end(),
+    first.end(),
+    second.end(),
+    third.end(),
+  ]);
 }

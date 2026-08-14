@@ -1,10 +1,13 @@
 begin;
-select plan(25);
+select plan(61);
 
 insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
 select ('60000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
  '00000000-0000-0000-0000-000000000000','authenticated','authenticated','continuity-'||n||'@example.test',''
 from generate_series(1,7)n;
+insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
+values('60000000-0000-4000-8000-000000000008','00000000-0000-0000-0000-000000000000',
+ 'authenticated','authenticated','continuity-outsider@example.test','');
 
 set local role postgres;
 insert into public.communities(id,name,owner_id,governance_state,council_target_size)
@@ -42,8 +45,26 @@ select is((select count(*) from public.elected_council_mandates where member_id=
 select is((select count(*) from public.council_continuity_history where event='resignation'),1::bigint,'resignation audited once');
 select is(public.council_vacant_seat_count('60100000-0000-4000-8000-000000000001'),1,'vacancy is derived');
 select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','4/5 remains operational');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000002',true);
+select lives_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
+ 'active member opens a one-vacancy cycle');
+set local role postgres;
+select is((select target_seats from public.election_cycles where community_id='60100000-0000-4000-8000-000000000001'
+ and purpose='reconstitution' and status='candidacy'),1::smallint,'four active mandates produce one election seat');
+update public.election_cycles set status='failed',completed_at=now()
+where community_id='60100000-0000-4000-8000-000000000001' and purpose='reconstitution' and status='candidacy';
 update public.elected_council_mandates set ended_at=now(),ended_reason='resignation' where member_id='60000000-0000-4000-8000-000000000002';
 select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','3/5 remains operational');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000004',true);
+select lives_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
+ 'active member opens a two-vacancy cycle');
+set local role postgres;
+select is((select target_seats from public.election_cycles where community_id='60100000-0000-4000-8000-000000000001'
+ and purpose='reconstitution' and status='candidacy'),2::smallint,'three active mandates produce two election seats');
+update public.election_cycles set status='failed',completed_at=now()
+where community_id='60100000-0000-4000-8000-000000000001' and purpose='reconstitution' and status='candidacy';
 update public.elected_council_mandates set ended_at=now(),ended_reason='resignation' where member_id='60000000-0000-4000-8000-000000000003';
 select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'under_strength','2/5 is under strength');
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000004',true);
@@ -59,6 +80,14 @@ select is((select target_seats from public.election_cycles where purpose='recons
 select is((select details->>'seats_available' from public.council_continuity_history where event='reconstitution_opened'),'3','opening is audited with vacancy count');
 select set_config('test.reconstitution_cycle',(select id::text from public.election_cycles where purpose='reconstitution'),true);
 set local role authenticated;
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000003',true);
+select is((select count(*) from public.get_council_continuity('60100000-0000-4000-8000-000000000001')),1::bigint,
+ 'active member can read continuity contract');
+select is((select reconstitution_status::text from public.get_council_continuity('60100000-0000-4000-8000-000000000001')),
+ 'candidacy','continuity contract exposes current aggregate cycle status');
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000008',true);
+select is((select count(*) from public.get_council_continuity('60100000-0000-4000-8000-000000000001')),0::bigint,
+ 'non-member cannot read continuity contract');
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000004',true);
 select throws_ok($$select public.stand_for_election(current_setting('test.reconstitution_cycle')::uuid)$$,
  '55000','An active councillor cannot stand for another seat','active councillor cannot seek a second seat');
@@ -69,6 +98,79 @@ select throws_ok($$select * from public.election_ballots$$,'42501','permission d
 select throws_ok($$select public.install_reconstitution_winners('60100000-0000-4000-8000-000000000001',
  current_setting('test.reconstitution_cycle')::uuid)$$,'42501','permission denied for function install_reconstitution_winners',
  'browser cannot install mandates');
+
+-- One remaining councillor is a caretaker, not an ordinary administrator.
+set local role postgres;
+update public.election_cycles set status='failed',completed_at=now()
+where id=current_setting('test.reconstitution_cycle')::uuid;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000004',true);
+select lives_ok($$select public.resign_elected_council_mandate('60100000-0000-4000-8000-000000000001')$$,
+ 'fourth councillor resigns self');
+set local role postgres;
+select is(public.active_elected_mandate_count('60100000-0000-4000-8000-000000000001'),1,'one mandate remains active');
+select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'under_strength','one active is under strength');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000005',true);
+select ok(public.has_temporary_caretaker_authority('60100000-0000-4000-8000-000000000001'),'last councillor is caretaker');
+select ok(public.has_community_continuity_authority('60100000-0000-4000-8000-000000000001'),'last councillor has narrow continuity authority');
+select ok(not public.has_elected_council_authority('60100000-0000-4000-8000-000000000001'),'last councillor lacks ordinary council authority');
+select ok(not public.is_active_community_admin('60100000-0000-4000-8000-000000000001'),'last councillor is not ordinary admin');
+select lives_ok($$select * from public.list_moderation_reports('60100000-0000-4000-8000-000000000001')$$,
+ 'caretaker may perform classified moderation continuity');
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000003',true);
+select lives_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
+ 'ordinary active member can open reconstitution with one councillor');
+set local role postgres;
+select is((select target_seats from public.election_cycles where community_id='60100000-0000-4000-8000-000000000001'
+ and purpose='reconstitution' and status='candidacy'),4::smallint,'one-active reconstitution targets four vacancies');
+
+-- Zero councillors remains democratic and member-driven, with no historical authority revival.
+set local role postgres;
+update public.election_cycles set status='failed',completed_at=now()
+where community_id='60100000-0000-4000-8000-000000000001' and purpose='reconstitution' and status='candidacy';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000005',true);
+select lives_ok($$select public.resign_elected_council_mandate('60100000-0000-4000-8000-000000000001')$$,
+ 'last councillor can resign');
+set local role postgres;
+select is(public.active_elected_mandate_count('60100000-0000-4000-8000-000000000001'),0,'zero mandates remain active');
+select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'vacant','zero active is vacant');
+select is(public.council_vacant_seat_count('60100000-0000-4000-8000-000000000001'),5,'all target seats are vacant');
+select is((select governance_state::text from public.get_council_continuity('60100000-0000-4000-8000-000000000001')),
+ 'democratic','governance remains democratic');
+set local role authenticated;
+select ok(not public.has_temporary_caretaker_authority('60100000-0000-4000-8000-000000000001'),'no elected caretaker remains');
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000007',true);
+select ok(not public.is_active_community_admin('60100000-0000-4000-8000-000000000001'),'owner is not restored at zero');
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000006',true);
+select ok(not public.is_active_community_admin('60100000-0000-4000-8000-000000000001'),'former admin is not restored at zero');
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000003',true);
+select lives_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
+ 'ordinary active member opens reconstitution at zero');
+select is((select target_seats from public.election_cycles where community_id='60100000-0000-4000-8000-000000000001'
+ and purpose='reconstitution' and status='candidacy'),5::smallint,'zero-active reconstitution targets all five vacancies');
+
+-- Purpose-dependent constraints preserve the founding 3/5 invariant for privileged writes.
+set local role postgres;
+select lives_ok($$insert into public.election_cycles(community_id,target_seats,purpose,status,completed_at)
+ values('60100000-0000-4000-8000-000000000001',3,'founding','failed',now())$$,'founding target three is allowed');
+select lives_ok($$insert into public.election_cycles(community_id,target_seats,purpose,status,completed_at)
+ values('60100000-0000-4000-8000-000000000001',5,'founding','failed',now())$$,'founding target five is allowed');
+select throws_ok($$insert into public.election_cycles(community_id,target_seats,purpose,status,completed_at)
+ values('60100000-0000-4000-8000-000000000001',1,'founding','failed',now())$$,'23514',null,'founding target one is rejected');
+select throws_ok($$insert into public.election_cycles(community_id,target_seats,purpose,status,completed_at)
+ values('60100000-0000-4000-8000-000000000001',2,'founding','failed',now())$$,'23514',null,'founding target two is rejected');
+select throws_ok($$insert into public.election_cycles(community_id,target_seats,purpose,status,completed_at)
+ values('60100000-0000-4000-8000-000000000001',4,'founding','failed',now())$$,'23514',null,'founding target four is rejected');
+select ok(not has_function_privilege('authenticated','public.close_election_round(uuid)','EXECUTE'),
+ 'browser cannot close election rounds');
+select ok(not has_function_privilege('authenticated','public.finalize_election_round(uuid)','EXECUTE'),
+ 'browser cannot finalize election rounds');
+select ok(not has_function_privilege('authenticated','public.install_reconstitution_winners(uuid,uuid)','EXECUTE'),
+ 'browser cannot install reconstitution winners');
+select ok(not has_function_privilege('authenticated','public.finalize_reconstitution_round(uuid)','EXECUTE'),
+ 'browser cannot invoke reconstitution finalization');
 
 select * from finish();
 rollback;

@@ -8,7 +8,10 @@ create type public.council_continuity_event as enum ('resignation', 'reconstitut
 alter table public.election_cycles
   add column purpose public.election_purpose not null default 'founding';
 alter table public.election_cycles drop constraint election_cycles_target_seats_check;
-alter table public.election_cycles add check (target_seats between 1 and 5);
+alter table public.election_cycles add constraint election_cycles_purpose_target_check check (
+  (purpose = 'founding' and target_seats in (3, 5))
+  or (purpose = 'reconstitution' and target_seats between 1 and 5)
+);
 
 -- Mandates are historical records. The partial index, rather than a lifetime key, prevents a
 -- member holding two seats while allowing a resigned member to win a later election.
@@ -91,6 +94,70 @@ returns boolean language sql stable security definer set search_path='' as $$
       else false end);
 $$;
 
+-- Caretakers receive only the explicitly classified continuity operations below. Keeping this
+-- separate from is_active_community_admin prevents booking overrides and other ordinary council
+-- powers from leaking to an under-strength council.
+create function public.has_community_continuity_authority(target_community_id uuid)
+returns boolean language sql stable security definer set search_path='' as $$
+  select public.is_active_community_admin(target_community_id)
+    or public.has_temporary_caretaker_authority(target_community_id);
+$$;
+
+create or replace function public.approve_membership(target_community_id uuid,target_user_id uuid)
+returns public.memberships language plpgsql security definer set search_path='' as $$
+declare approved_membership public.memberships;
+begin
+  if not public.has_community_continuity_authority(target_community_id) then
+    raise exception 'Community continuity authority required' using errcode='42501'; end if;
+  update public.memberships set status='active' where community_id=target_community_id
+    and user_id=target_user_id and role='member' and status='pending' returning * into approved_membership;
+  if approved_membership is null then raise exception 'Pending membership not found' using errcode='P0002'; end if;
+  return approved_membership;
+end $$;
+
+create or replace function public.list_moderation_reports(target_community_id uuid)
+returns table(id uuid,target_type public.moderation_target_type,target_label text,item_id uuid,
+  reason public.moderation_reason,note text,status public.moderation_status,created_at timestamptz,action_taken text)
+language plpgsql stable security definer set search_path='' as $$
+begin
+  if not public.has_community_continuity_authority(target_community_id) then
+    raise exception 'Community continuity authority required' using errcode='42501'; end if;
+  return query select r.id,r.target_type,
+    case when r.target_type='item' then coalesce(i.name,'Item') else 'Transaction counterparty' end,
+    r.item_id,r.reason,r.note,r.status,r.created_at,r.action_taken
+  from public.moderation_reports r left join public.items i on i.id=r.item_id
+  where r.community_id=target_community_id order by r.created_at desc;
+end $$;
+
+create or replace function public.handle_moderation_report(target_report_id uuid)
+returns void language plpgsql security definer set search_path='' as $$
+begin
+  update public.moderation_reports set status='handled',handled_at=now(),handled_by=auth.uid(),action_taken='reviewed'
+  where id=target_report_id and status='open' and public.has_community_continuity_authority(community_id);
+  if not found then
+    if exists(select 1 from public.moderation_reports where id=target_report_id and status='handled'
+      and public.has_community_continuity_authority(community_id)) then
+      raise exception 'Report is already handled' using errcode='22023'; end if;
+    raise exception 'Community continuity authority required' using errcode='42501';
+  end if;
+end $$;
+
+create or replace function public.hide_reported_item(target_report_id uuid)
+returns void language plpgsql security definer set search_path='' as $$
+declare report_item uuid;
+begin
+  update public.moderation_reports set status='handled',handled_at=now(),handled_by=auth.uid(),action_taken='item hidden'
+  where id=target_report_id and target_type='item' and status='open'
+    and public.has_community_continuity_authority(community_id) returning item_id into report_item;
+  if report_item is null then
+    if exists(select 1 from public.moderation_reports where id=target_report_id and target_type='item' and status='handled'
+      and public.has_community_continuity_authority(community_id)) then
+      raise exception 'Report is already handled' using errcode='22023'; end if;
+    raise exception 'Community continuity authority and open item report required' using errcode='42501';
+  end if;
+  update public.items set moderation_hidden=true where id=report_item;
+end $$;
+
 create function public.resign_elected_council_mandate(target_community_id uuid)
 returns void language plpgsql security definer set search_path='' as $$
 declare c public.communities; m public.elected_council_mandates;
@@ -168,8 +235,12 @@ begin
     where ec.cycle_id=c.id and (c.purpose='founding' or not exists(select 1 from public.elected_council_mandates cm
       where cm.community_id=c.community_id and cm.member_id=ec.candidate_id and cm.ended_at is null));
   get diagnostics candidate_count=row_count;
-  if candidate_count < case when c.purpose='founding' then 3 else 1 end then
-    raise exception 'Not enough active eligible candidates' using errcode='55000'; end if;
+  if candidate_count < (case when c.purpose='founding' then 3 else 1 end) then
+    if c.purpose='founding' then
+      raise exception 'At least three active candidates are required' using errcode='55000';
+    end if;
+    raise exception 'At least one active eligible candidate is required' using errcode='55000';
+  end if;
   insert into public.election_electorate(cycle_id,community_id,voter_id)
     select c.id,c.community_id,m.user_id from public.memberships m where m.community_id=c.community_id and m.status='active';
   get diagnostics electorate_count=row_count;
@@ -202,7 +273,7 @@ begin
   select count(*) into electable from public.election_candidate_results where round_id=r.id and approval_count>0;
   if electable<=r.seats_available then
     select count(*)+electable into final_winners from public.election_provisional_winners where cycle_id=c.id;
-    if final_winners < case when c.purpose='founding' then 3 else 1 end then
+    if final_winners < (case when c.purpose='founding' then 3 else 1 end) then
       update public.election_rounds set status='insufficient_winners',ballot_count=ballots,finalized_at=now() where id=r.id;
       update public.election_cycles set status='failed',completed_at=now() where id=c.id; return 'insufficient_winners';
     end if;
@@ -262,12 +333,14 @@ end $$;
 
 create function public.finalize_reconstitution_round(target_round_id uuid)
 returns public.election_round_status language plpgsql security definer set search_path='' as $$
-declare r public.election_rounds; cycle public.election_cycles; c public.communities; result public.election_round_status;
+declare r public.election_rounds; cycle public.election_cycles; c public.communities;
+  ec public.elected_councils; result public.election_round_status;
 begin
   select * into r from public.election_rounds where id=target_round_id;
   select * into cycle from public.election_cycles where id=r.cycle_id;
   select * into c from public.communities where id=cycle.community_id for update;
   if c.governance_state<>'democratic' or cycle.purpose<>'reconstitution' then raise exception 'Round is not a reconstitution election' using errcode='55000'; end if;
+  select * into ec from public.elected_councils where community_id=c.id for update;
   select * into cycle from public.election_cycles where id=cycle.id and community_id=c.id for update;
   select * into r from public.election_rounds where id=target_round_id and cycle_id=cycle.id for update;
   perform public.close_election_round(r.id);
@@ -296,11 +369,13 @@ $$;
 revoke all on function public.active_elected_mandate_count(uuid) from public;
 revoke all on function public.council_operational_status(uuid) from public;
 revoke all on function public.council_vacant_seat_count(uuid) from public;
+revoke all on function public.has_community_continuity_authority(uuid) from public;
 revoke all on function public.resign_elected_council_mandate(uuid) from public;
 revoke all on function public.open_council_reconstitution_cycle(uuid) from public;
 revoke all on function public.install_reconstitution_winners(uuid,uuid) from public;
 revoke all on function public.finalize_reconstitution_round(uuid) from public;
 revoke all on function public.get_council_continuity(uuid) from public;
 grant execute on function public.resign_elected_council_mandate(uuid),
-  public.open_council_reconstitution_cycle(uuid),public.get_council_continuity(uuid) to authenticated;
+  public.open_council_reconstitution_cycle(uuid),public.get_council_continuity(uuid),
+  public.has_community_continuity_authority(uuid) to authenticated;
 grant execute on function public.finalize_reconstitution_round(uuid) to service_role;
