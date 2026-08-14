@@ -8,11 +8,19 @@ The MVP is successful if it demonstrates real circulation of objects, not merely
 
 ## Actors
 
-### Community administrator
+### Community owner and appointed administrator
 
-Creates/manages a community, moderates membership and can remove inappropriate listings.
+The community owner holds the ownership designation and, while governance is managed, administers
+the community and may appoint or remove operational administrators. Appointed administration is a
+delegated role and is not ownership.
 
-### Member / owner
+### Elected council member
+
+When a community completes its optional democratic transition, elected council members exercise
+ordinary community administration. Ownership, appointed administration and an electoral mandate
+remain distinct roles; the governance constitution is defined in ADR 0005.
+
+### Member / item owner
 
 Can list an eligible item, define its basic availability and free/paid-per-day terms, and accept or refuse booking requests.
 
@@ -20,7 +28,7 @@ Can list an eligible item, define its basic availability and free/paid-per-day t
 
 Can browse eligible items, request a reservation, complete handover and confirm return.
 
-A member can be both owner and borrower.
+A member can be both an item owner and a borrower.
 
 ## Core flows
 
@@ -41,8 +49,8 @@ A member can be both owner and borrower.
 
 1. Borrower selects an available date range.
 2. System rejects conflicting/invalid ranges.
-3. Owner receives a booking request.
-4. Owner accepts or refuses.
+3. Item owner receives a booking request.
+4. Item owner accepts or refuses.
 5. On acceptance, the booking becomes confirmed.
 
 ### Handover and return
@@ -57,12 +65,13 @@ A member can be both owner and borrower.
 
 - authentication;
 - community membership and roles;
+- managed ownership/appointed administration and optional democratic council governance;
 - item CRUD with photos;
 - basic search/filtering by name/category;
 - availability representation;
 - booking request lifecycle;
 - conflict prevention;
-- owner approval/refusal;
+- item-owner approval/refusal;
 - handover/return lifecycle;
 - condition photos;
 - basic moderation/removal;
@@ -72,7 +81,7 @@ A member can be both owner and borrower.
 
 ## MVP product rules
 
-- Items must belong to a single owner account for the MVP.
+- Items must belong to a single item-owner account for the MVP.
 - Items are visible only within communities where sharing is authorized.
 - A confirmed booking blocks overlapping confirmed bookings for the same item.
 - The platform displays agreed terms but does not collect or transfer money.
@@ -90,7 +99,7 @@ Measure at least:
 - booking requests;
 - accepted bookings;
 - completed handovers/returns;
-- repeat owners and repeat borrowers;
+- repeat item owners and repeat borrowers;
 - cancellations, disputes, non-returns and damage reports.
 
 The primary outcome is repeated completed exchanges, not registrations.
