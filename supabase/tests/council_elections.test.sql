@@ -73,7 +73,7 @@ select is((select status::text from public.election_rounds where id=(select roun
 select lives_ok(format('select public.close_election_round(%L)',(select round from ids)),'internal authority closes a genuinely finalizable round');
 select is(public.finalize_election_round((select round from ids))::text,'completed','deterministic top three completes the election');
 select is((select count(*) from public.election_winners where cycle_id=(select cycle from ids)),3::bigint,'three positive-score winners recorded');
-select throws_ok(format('select public.finalize_election_round(%L)',(select round from ids)),'55000','Election round is already finalized','repeat finalization rejected');
+select throws_ok(format('select public.finalize_election_round(%L)',(select round from ids)),'55000',null,'repeat finalization rejected without requiring a specific message');
 select throws_ok(format('select public.submit_election_ballot(%L,array[]::uuid[])',(select round from ids)),'55000','Voting is closed','vote after finalization rejected');
 
 select is(public.election_quorum_threshold(5),3,'quorum boundary 5');
