@@ -84,6 +84,16 @@ try {
 
   // A. commit vs commit: one transition and one initial round.
   const duplicate = await prepare(observer, first, 1);
+  // prepare() performs a real authenticated COMMIT, including both deferred consistency triggers.
+  // The RPC succeeds without weakening the private election table boundary.
+  await asUser(first);
+  const privateCycleRead = await rejected(
+    first.query("select * from public.election_cycles where id=$1", [
+      duplicate.cycle,
+    ]),
+  );
+  assert.equal(privateCycleRead?.code, "42501");
+  await first.query("rollback");
   await Promise.all([asUser(first), asUser(second)]);
   await first.query("select public.commit_democratic_transfer($1)", [
     duplicate.community,

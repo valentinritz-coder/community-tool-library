@@ -7,7 +7,7 @@ alter table public.communities
 -- A deferred invariant permits atomic target changes while making it impossible to commit a
 -- community pointer whose community or target differs from the authoritative engine cycle.
 create function public.enforce_active_governance_cycle_consistency()
-returns trigger language plpgsql set search_path = '' as $$
+returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if exists (
     select 1 from public.communities c
@@ -17,6 +17,7 @@ begin
   ) then raise exception 'Active governance cycle is inconsistent with community target' using errcode='23514'; end if;
   return null;
 end $$;
+revoke all on function public.enforce_active_governance_cycle_consistency() from public;
 create constraint trigger communities_active_cycle_consistency
 after insert or update of active_election_cycle_id,council_target_size on public.communities
 deferrable initially deferred for each row execute function public.enforce_active_governance_cycle_consistency();
