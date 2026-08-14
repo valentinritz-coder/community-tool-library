@@ -1,5 +1,5 @@
 create type public.election_cycle_status as enum ('candidacy', 'voting', 'completed', 'failed');
-create type public.election_round_status as enum ('voting', 'completed', 'runoff_required', 'failed_quorum', 'insufficient_winners');
+create type public.election_round_status as enum ('voting', 'closed', 'completed', 'runoff_required', 'failed_quorum', 'insufficient_winners');
 
 create table public.election_cycles (
   id uuid primary key default gen_random_uuid(),
@@ -49,6 +49,7 @@ create table public.election_rounds (
   ballot_count integer,
   quorum_threshold integer not null check (quorum_threshold >= 3),
   finalized_at timestamptz,
+  closed_at timestamptz,
   unique (cycle_id, round_number)
 );
 
@@ -92,6 +93,14 @@ create table public.election_winners (
   primary key (cycle_id, candidate_id)
 );
 
+create table public.election_provisional_winners (
+  cycle_id uuid not null references public.election_cycles(id) on delete cascade,
+  candidate_id uuid not null references auth.users(id) on delete restrict,
+  carried_from_round smallint not null check (carried_from_round > 0),
+  approval_count integer not null check (approval_count > 0),
+  primary key (cycle_id, candidate_id)
+);
+
 create function public.election_quorum_threshold(electorate_count integer)
 returns integer language sql immutable set search_path = '' as $$
   select greatest(3, ceil(electorate_count / 5.0)::integer);
@@ -107,19 +116,20 @@ alter table public.election_ballots enable row level security;
 alter table public.election_ballot_approvals enable row level security;
 alter table public.election_candidate_results enable row level security;
 alter table public.election_winners enable row level security;
+alter table public.election_provisional_winners enable row level security;
 
 revoke all on public.election_cycles, public.election_candidacies, public.election_electorate,
   public.election_candidates, public.election_rounds, public.election_round_candidates,
   public.election_ballots, public.election_ballot_approvals, public.election_candidate_results,
-  public.election_winners from anon;
+  public.election_winners, public.election_provisional_winners from anon;
 revoke all on public.election_cycles, public.election_candidacies, public.election_electorate,
   public.election_candidates, public.election_rounds, public.election_round_candidates,
   public.election_ballots, public.election_ballot_approvals, public.election_candidate_results,
-  public.election_winners from authenticated;
+  public.election_winners, public.election_provisional_winners from authenticated;
 
 -- This internal primitive is intentionally not granted to browser roles. Issue #56 will compose it
 -- with the governance-state transition in one transaction.
-create function public.create_election_cycle(target_community_id uuid, requested_seats smallint)
+create function public.create_election_cycle(target_community_id uuid, requested_seats integer)
 returns uuid language plpgsql security definer set search_path = '' as $$
 declare new_id uuid;
 begin
@@ -131,6 +141,19 @@ begin
   end if;
   insert into public.election_cycles(community_id, target_seats) values (target_community_id, requested_seats) returning id into new_id;
   return new_id;
+end $$;
+
+-- Closing is an internal platform action, separate from counting. It is deliberately unavailable
+-- to every community role; #56 may compose it with an authoritative server/scheduler boundary.
+create function public.close_election_round(target_round_id uuid)
+returns void language plpgsql security definer set search_path = '' as $$
+declare r public.election_rounds;
+begin
+  select * into r from public.election_rounds where id = target_round_id for update;
+  if r.id is null or r.status <> 'voting' then
+    raise exception 'Election round cannot be closed' using errcode = '55000';
+  end if;
+  update public.election_rounds set status = 'closed', closed_at = now() where id = r.id;
 end $$;
 
 create function public.stand_for_election(target_cycle_id uuid)
@@ -208,15 +231,11 @@ end $$;
 
 create function public.finalize_election_round(target_round_id uuid)
 returns public.election_round_status language plpgsql security definer set search_path = '' as $$
-declare r public.election_rounds; c public.election_cycles; ballots integer; electable integer; already_won integer;
+declare r public.election_rounds; c public.election_cycles; ballots integer; electable integer;
   boundary_score integer; above_boundary integer; tied_boundary integer; new_round uuid; final_winners integer;
 begin
-  if auth.uid() is null then raise exception 'Authentication required' using errcode = '42501'; end if;
   select * into r from public.election_rounds where id = target_round_id for update;
-  if r.id is null or r.status <> 'voting' then raise exception 'Election round is already finalized' using errcode = '55000'; end if;
-  if not exists (select 1 from public.election_electorate where cycle_id = r.cycle_id and voter_id = auth.uid()) then
-    raise exception 'Only the frozen electorate can finalize this round' using errcode = '42501';
-  end if;
+  if r.id is null or r.status <> 'closed' then raise exception 'Election round is not closed and finalizable' using errcode = '55000'; end if;
   select * into c from public.election_cycles where id = r.cycle_id for update;
   select count(*) into ballots from public.election_ballots where round_id = r.id;
   if ballots < r.quorum_threshold then
@@ -230,15 +249,17 @@ begin
       on a.candidate_id=rc.candidate_id and exists (select 1 from public.election_ballots b where b.id=a.ballot_id and b.round_id=r.id)
     where rc.round_id=r.id group by rc.candidate_id;
   select count(*) into electable from public.election_candidate_results where round_id=r.id and approval_count > 0;
-  select count(*) into already_won from public.election_winners where cycle_id=c.id;
   if electable <= r.seats_available then
-    insert into public.election_winners select c.id, candidate_id, r.round_number, approval_count from public.election_candidate_results where round_id=r.id and approval_count>0;
-    select count(*) into final_winners from public.election_winners where cycle_id=c.id;
+    select count(*) + electable into final_winners from public.election_provisional_winners where cycle_id=c.id;
     if final_winners < 3 then
       update public.election_rounds set status='insufficient_winners',ballot_count=ballots,finalized_at=now() where id=r.id;
       update public.election_cycles set status='failed',completed_at=now() where id=c.id;
       return 'insufficient_winners';
     end if;
+    insert into public.election_winners
+      select cycle_id,candidate_id,carried_from_round,approval_count from public.election_provisional_winners where cycle_id=c.id
+      union all
+      select c.id,candidate_id,r.round_number,approval_count from public.election_candidate_results where round_id=r.id and approval_count>0;
     update public.election_rounds set status='completed',ballot_count=ballots,finalized_at=now() where id=r.id;
     update public.election_cycles set status='completed',completed_at=now() where id=c.id;
     return 'completed';
@@ -246,9 +267,12 @@ begin
   select approval_count into boundary_score from public.election_candidate_results where round_id=r.id and approval_count>0 order by approval_count desc offset r.seats_available-1 limit 1;
   select count(*) into above_boundary from public.election_candidate_results where round_id=r.id and approval_count>boundary_score;
   select count(*) into tied_boundary from public.election_candidate_results where round_id=r.id and approval_count=boundary_score;
-  insert into public.election_winners select c.id,candidate_id,r.round_number,approval_count from public.election_candidate_results where round_id=r.id and approval_count>boundary_score;
+  insert into public.election_provisional_winners select c.id,candidate_id,r.round_number,approval_count from public.election_candidate_results where round_id=r.id and approval_count>boundary_score;
   if tied_boundary <= r.seats_available-above_boundary then
-    insert into public.election_winners select c.id,candidate_id,r.round_number,approval_count from public.election_candidate_results where round_id=r.id and approval_count=boundary_score;
+    insert into public.election_winners
+      select cycle_id,candidate_id,carried_from_round,approval_count from public.election_provisional_winners where cycle_id=c.id
+      union all
+      select c.id,candidate_id,r.round_number,approval_count from public.election_candidate_results where round_id=r.id and approval_count=boundary_score;
     update public.election_rounds set status='completed',ballot_count=ballots,finalized_at=now() where id=r.id;
     update public.election_cycles set status='completed',completed_at=now() where id=c.id;
     return 'completed';
@@ -262,18 +286,22 @@ begin
 end $$;
 
 create function public.get_election_result(target_cycle_id uuid)
-returns table(candidate_id uuid, approval_count integer, elected boolean, runoff_candidate boolean)
+returns table(round_id uuid, round_number smallint, round_status public.election_round_status,
+  candidate_id uuid, approval_count integer, provisional boolean, final_elected boolean, runoff_candidate boolean)
 language sql stable security definer set search_path = '' as $$
-  select cr.candidate_id, cr.approval_count, (w.candidate_id is not null), cr.is_runoff_candidate
+  select r.id, r.round_number, r.status, cr.candidate_id, cr.approval_count,
+    (p.candidate_id is not null), (c.status='completed' and w.candidate_id is not null), cr.is_runoff_candidate
   from public.election_candidate_results cr
   join public.election_rounds r on r.id=cr.round_id
   join public.election_cycles c on c.id=r.cycle_id
   left join public.election_winners w on w.cycle_id=c.id and w.candidate_id=cr.candidate_id
+  left join public.election_provisional_winners p on p.cycle_id=c.id and p.candidate_id=cr.candidate_id
   where c.id=target_cycle_id and c.status in ('completed','failed')
     and exists(select 1 from public.memberships m where m.community_id=c.community_id and m.user_id=auth.uid() and m.status='active');
 $$;
 
-revoke all on function public.create_election_cycle(uuid, smallint) from public;
+revoke all on function public.create_election_cycle(uuid, integer) from public;
+revoke all on function public.close_election_round(uuid) from public;
 revoke all on function public.freeze_election_cycle(uuid) from public;
 revoke all on function public.election_quorum_threshold(integer) from public;
 revoke all on function public.stand_for_election(uuid) from public;
@@ -282,5 +310,4 @@ revoke all on function public.submit_election_ballot(uuid, uuid[]) from public;
 revoke all on function public.finalize_election_round(uuid) from public;
 revoke all on function public.get_election_result(uuid) from public;
 grant execute on function public.stand_for_election(uuid), public.withdraw_election_candidacy(uuid),
-  public.submit_election_ballot(uuid, uuid[]), public.finalize_election_round(uuid),
-  public.get_election_result(uuid) to authenticated;
+  public.submit_election_ballot(uuid, uuid[]), public.get_election_result(uuid) to authenticated;

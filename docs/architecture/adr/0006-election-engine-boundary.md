@@ -21,10 +21,20 @@ An aggregate result RPC never returns voter identity or ballot selections.
 Cycle creation and freeze are `SECURITY DEFINER` composition primitives with execution revoked from
 browser roles. Issue #56 must call them inside its authoritative political transition; issue #55
 does not expose a client-callable governance-state transition. Candidacy, withdrawal, ballot
-submission and result calculation are narrow authenticated operations. Finalization locks the
-round and cycle, persists its outcome once, and creates a new round containing only candidates tied
+submission and aggregate result reads are narrow authenticated operations. Closing and finalizing a
+round are separate internal platform primitives, both revoked from browser roles. A round is
+finalizable only after the close primitive has atomically changed it from `voting` to `closed`;
+neither an elector nor an owner, appointed administrator or caretaker receives discretionary
+closing power. Issue #56 or an authoritative server scheduler may compose that boundary without
+changing community governance. Finalization locks the closed round and cycle, persists its outcome
+once, and creates a new round containing only candidates tied
 across the final-seat boundary when necessary. Every runoff reuses the original electorate
 snapshot but has a distinct ballot uniqueness boundary.
+
+Candidates already above a runoff boundary are recorded as provisional only. The authoritative
+winner relation is materialized only when the entire founding cycle completes with at least three
+winners. The aggregate result contract identifies its round and distinguishes provisional status
+from final election, so a failed or unresolved cycle cannot imply a one- or two-person council.
 
 Election failure marks the cycle failed without changing `communities.governance_state`. A later
 cycle may therefore be created while #56 keeps the community in `democratic_transition`. Recorded
