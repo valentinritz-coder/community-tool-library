@@ -26,7 +26,7 @@ another role implicitly.
 | Community owner         | Holds the community's ownership designation. In `managed` and `democratic_preparation`, exercises ordinary administration and appoints or removes appointed administrators. May open/cancel preparation, choose a 3- or 5-seat target, and explicitly commit an eligible founding election. After commitment, ownership alone grants no ordinary administration, election control or right to restore `managed`. |
 | Appointed administrator | Exercises delegated ordinary administration while appointed administration is in force. Cannot exercise the owner's ownership-only decisions or acquire elected authority by appointment.                                                                                                                                                                                                                        |
 | Temporary caretaker     | Preserves necessary day-to-day service and enforces existing community rules while a valid council is unavailable. May handle existing membership, listing and moderation operations needed for continuity, but cannot appoint administrators, change the constitution or target council size, cancel democratic transfer, select candidates, alter an election, fill vacancies, or claim a democratic mandate.  |
-| Ordinary active member  | Uses ordinary member capabilities and, when eligible, may vote, stand as an individual candidate, and use the member-accessible democratic reconstitution path. Active membership alone grants no administrative power.                                                                                                                                                                                          |
+| Ordinary active member  | Uses ordinary member capabilities, may cast one ballot when included in the authoritative electorate snapshot, may stand as an individual candidate when eligible, and may use the member-accessible democratic reconstitution path. Active membership alone grants no administrative power.                                                                                                                     |
 | Candidate               | An eligible active member who individually stands for a particular election. Candidacy grants no administrative or council authority.                                                                                                                                                                                                                                                                            |
 | Elected council member  | Holds a valid electoral mandate and, as part of an operational council, exercises ordinary community administration. When only one or two elected members remain, each has temporary caretaker authority only until reconstitution.                                                                                                                                                                              |
 
@@ -89,14 +89,14 @@ dedicated, member-controlled democratic procedure; this ADR does not design that
 Operator interventions described above remain available in every row and do not confer community
 political authority.
 
-| Community condition                                                                   | Ordinary administration                                                                             | Appoint/remove appointed admins | Start/cancel preparation and choose target                        | Commit founding transfer                              | Conduct/finalize election                                                                                             | Start reconstitution and fill vacancies                                                                                |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `managed`                                                                             | Owner and appointed administrators                                                                  | Owner                           | Owner may start preparation                                       | Not available                                         | Not available                                                                                                         | Not applicable                                                                                                         |
-| `democratic_preparation`                                                              | Owner and appointed administrators                                                                  | Owner                           | Owner may cancel or choose 3/5; cannot curate candidates          | Owner, only when all preconditions hold               | Not before commitment                                                                                                 | Not applicable                                                                                                         |
-| `democratic_transition`                                                               | Former appointed administrators as temporary caretakers, limited to continuity under existing rules | Nobody                          | Nobody; target cannot be changed and transfer cannot be cancelled | Already committed; nobody can reverse it unilaterally | Eligible active members vote; deterministic platform rules establish the result; no owner/admin/caretaker controls it | Not applicable until a council is installed; failed founding elections require another member candidacy/election cycle |
-| `democratic`, 3+ active elected members                                               | Operational elected council                                                                         | Nobody                          | Nobody                                                            | Not applicable                                        | Eligible active members vote under the constitution; the sitting council remains until a valid successor is installed | Eligible active members can participate; the democratic process may fill only vacant seats                             |
-| `democratic`, 1–2 active elected members (`under-strength / reconstitution required`) | Remaining elected members only as temporary caretakers, limited to continuity under existing rules  | Nobody                          | Nobody                                                            | Not applicable                                        | Eligible active members vote under the constitution                                                                   | Member-accessible reconstitution; only vacant seats may be filled                                                      |
-| `democratic`, 0 active elected members (`vacant / reconstitution required`)           | Nobody; human-governed functions may be restricted                                                  | Nobody                          | Nobody                                                            | Not applicable                                        | Eligible active members vote under the constitution                                                                   | A member-accessible path independent of the historical owner; only vacant seats may be filled                          |
+| Community condition                                                                   | Ordinary administration                                                                             | Appoint/remove appointed admins | Start/cancel preparation and choose target                        | Commit founding transfer                              | Conduct/finalize election                                                                                                               | Initiate reconstitution / fill vacancies                                                                                                                        |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `managed`                                                                             | Owner and appointed administrators                                                                  | Owner                           | Owner may start preparation                                       | Not available                                         | Not available                                                                                                                           | Not applicable                                                                                                                                                  |
+| `democratic_preparation`                                                              | Owner and appointed administrators                                                                  | Owner                           | Owner may cancel or choose 3/5; cannot curate candidates          | Owner, only when all preconditions hold               | Not before commitment                                                                                                                   | Not applicable                                                                                                                                                  |
+| `democratic_transition`                                                               | Former appointed administrators as temporary caretakers, limited to continuity under existing rules | Nobody                          | Nobody; target cannot be changed and transfer cannot be cancelled | Already committed; nobody can reverse it unilaterally | Active members in the frozen electorate vote; deterministic platform rules establish the result; no owner/admin/caretaker controls it   | Not applicable until a council is installed; failed founding elections require another member candidacy/election cycle                                          |
+| `democratic`, 3+ active elected members                                               | Operational elected council                                                                         | Nobody                          | Nobody                                                            | Not applicable                                        | Active members in the electorate snapshot vote under the constitution; the sitting council remains until a valid successor is installed | A vacancy makes the mechanism available deterministically; an active member can initiate/access it, and the election may fill only vacant seats                 |
+| `democratic`, 1–2 active elected members (`under-strength / reconstitution required`) | Remaining elected members only as temporary caretakers, limited to continuity under existing rules  | Nobody                          | Nobody                                                            | Not applicable                                        | Active members in the electorate snapshot vote under the constitution                                                                   | A vacancy makes reconstitution available deterministically; an active member can initiate/access it without the former owner or former appointed administrators |
+| `democratic`, 0 active elected members (`vacant / reconstitution required`)           | Nobody; human-governed functions may be restricted                                                  | Nobody                          | Nobody                                                            | Not applicable                                        | Active members in the electorate snapshot vote under the constitution                                                                   | Reconstitution is available deterministically; an active member can initiate/access it independently of the historical owner; only vacant seats may be filled   |
 
 The matrix describes authorization outcomes, not an implementation mechanism. In particular, UI
 visibility must not be treated as authorization.
@@ -116,7 +116,13 @@ visibility must not be treated as authorization.
 
 Council, by-election and reconstitution elections use multi-winner approval voting:
 
-- each eligible voter in the authoritative electorate may submit one ballot;
+For every election, the authoritative electorate snapshot consists of the community's active
+members at the moment the snapshot is frozen. Every member in that snapshot may submit exactly one
+ballot. Voting requires no additional tenure rule, owner/admin/council approval, or qualification
+as a subclass of active member. Candidate eligibility is separate and does not restrict this right
+to vote; this ADR does not add new candidacy criteria.
+
+- each active member in the authoritative electorate snapshot may submit exactly one ballot;
 - a voter may approve up to the number of seats being filled (the target size for a founding or
   full election, and only the vacant-seat count for a by-election/reconstitution);
 - approvals are unranked;
@@ -128,11 +134,19 @@ Council, by-election and reconstitution elections use multi-winner approval voti
 - a tie affecting the final occupied seat requires a runoff limited to the tied candidates; random
   selection is forbidden.
 
-For a three-seat target, exactly three electable winners are required to install a council. For a
-five-seat target, three, four or five electable winners may install it; any remainder is explicitly
-vacant. Exactly three candidates are therefore enough to permit commitment for either target,
-provided all other preconditions hold, although the election result must still satisfy quorum and
-produce three electable winners.
+For a founding election or full successor election, the result constitutes a new council and must
+contain at least three elected members. A three-seat target therefore requires three electable
+winners. A five-seat target permits three, four or five electable winners, with any remainder
+explicitly vacant. Exactly three candidates are therefore enough to permit founding commitment for
+either target, provided all other preconditions hold, although the result must still satisfy quorum
+and produce three electable winners.
+
+A by-election or reconstitution election instead preserves every existing active elected mandate
+and fills only currently vacant seats. It may therefore elect fewer than three new members. Normal
+council operation resumes as soon as `existing active elected mandates + newly elected mandates >=
+3`. For example, one remaining mandate plus two winners filling the two vacancies of a three-seat
+council restores normal operation; three new winners are neither required nor possible in that
+election.
 
 The term is 12 months. A sitting council remains in office after that term until a valid successor
 is installed, avoiding an authority gap. This ADR does not otherwise design periodic renewal.
@@ -157,6 +171,12 @@ configured target. Failure leaves the existing democratic continuity condition u
 council operation resumes when at least three active elected members hold mandates. There is no
 automatic succession by an unelected runner-up. Detailed workflows and authorization are reserved
 for issue #60.
+
+Whenever a democratic council has a vacancy, availability of the by-election/reconstitution
+mechanism is a deterministic consequence of that vacancy rather than a discretionary political
+power of the historical owner, former appointed administrators or caretakers. An active member can
+initiate or reach that process in the 3+, 1–2 and zero-active-member conditions. Issue #60 will
+define the UX, RPC, transaction and concurrency details without weakening this access invariant.
 
 ### Ballot privacy
 
@@ -195,4 +215,5 @@ Storage and access-control design are deliberately deferred to the implementatio
 - cryptographic/end-to-end verifiable or coercion-resistant voting;
 - automatic runner-up succession;
 - changing council size during a mandate;
-- ownership transfer, co-ownership or a designed return from `democratic` to `managed`.
+- ownership transfer, co-ownership, billing governance or a designed return from `democratic` to
+  `managed`.
