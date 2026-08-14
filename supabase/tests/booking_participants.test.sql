@@ -11,9 +11,9 @@ insert into auth.users (id, instance_id, aud, role, email, encrypted_password) v
   ('a0000000-0000-4000-8000-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'outsider@example.test', ''),
   ('a0000000-0000-4000-8000-000000000007', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'cross-admin@example.test', ''),
   ('a0000000-0000-4000-8000-000000000008', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'pending-member@example.test', '');
-insert into public.communities (id, name) values
-  ('a1000000-0000-4000-8000-000000000001', 'Participant community'),
-  ('a1000000-0000-4000-8000-000000000002', 'Other community');
+insert into public.communities (id, name, owner_id) values
+  ('a1000000-0000-4000-8000-000000000001', 'Participant community', 'a0000000-0000-4000-8000-000000000004'),
+  ('a1000000-0000-4000-8000-000000000002', 'Other community', 'a0000000-0000-4000-8000-000000000007');
 insert into public.memberships (community_id, user_id, role, status) values
   ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'member', 'active'),
   ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000002', 'member', 'active'),

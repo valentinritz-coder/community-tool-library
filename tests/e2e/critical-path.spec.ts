@@ -55,7 +55,9 @@ test.describe.serial("critical MVP journeys", () => {
       .fill(communityJoinCode);
     await joining.page.getByRole("button", { name: "Request to join" }).click();
     await expect(
-      joining.page.getByText("Request sent. An admin must approve it."),
+      joining.page.getByText(
+        "Request sent. The community owner or an appointed administrator must approve it.",
+      ),
     ).toBeVisible();
     const pendingMembership = joining.page
       .getByRole("heading", { name: "Memberships and requests" })

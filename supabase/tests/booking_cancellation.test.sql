@@ -7,8 +7,8 @@ insert into auth.users (id, instance_id, aud, role, email, encrypted_password) v
  ('d0000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','cancel-member@example.test',''),
  ('d0000000-0000-4000-8000-000000000004','00000000-0000-0000-0000-000000000000','authenticated','authenticated','cancel-admin@example.test',''),
  ('d0000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','cancel-borrower-two@example.test','');
-insert into public.communities(id,name) values
- ('d1000000-0000-4000-8000-000000000001','Cancellation community');
+insert into public.communities(id,name,owner_id) values
+ ('d1000000-0000-4000-8000-000000000001','Cancellation community','d0000000-0000-4000-8000-000000000004');
 insert into public.memberships(community_id,user_id,role,status) values
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001','member','active'),
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','member','active'),

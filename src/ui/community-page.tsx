@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   canApproveMembership,
+  canManageAppointedAdministrator,
+  hasManagedAdministrationAuthority,
   type Community,
   type Membership,
 } from "../domain/community";
@@ -59,7 +61,10 @@ export function CommunityPage() {
   async function refresh() {
     const supabase = getSupabaseBrowserClient();
     const [communities, memberships] = await Promise.all([
-      supabase.from("communities").select("id,name,join_code").order("name"),
+      supabase
+        .from("communities")
+        .select("id,name,join_code,owner_id,governance_state")
+        .order("name"),
       supabase.from("memberships").select("community_id,user_id,role,status"),
     ]);
     if (communities.error) throw communities.error;
@@ -169,7 +174,7 @@ export function CommunityPage() {
   async function runRpc(
     action: string,
     functionName: string,
-    parameters: Record<string, string>,
+    parameters: Record<string, string | boolean>,
     success: string,
   ) {
     announce("");
@@ -329,7 +334,7 @@ export function CommunityPage() {
                     "create-community",
                     "create_community",
                     { community_name: name },
-                    "Community created. You are its admin.",
+                    "Community created. You are its community owner.",
                   );
                 }}
               >
@@ -348,7 +353,10 @@ export function CommunityPage() {
             </section>
             <section className="card" aria-labelledby="join-title">
               <h2 id="join-title">Request to join</h2>
-              <p>An admin must approve your request.</p>
+              <p>
+                The community owner or an appointed administrator must approve
+                your request.
+              </p>
               <form
                 aria-busy={isPending("join-community")}
                 onSubmit={(event) => {
@@ -360,7 +368,7 @@ export function CommunityPage() {
                     "join-community",
                     "request_to_join_community",
                     { requested_join_code: code },
-                    "Request sent. An admin must approve it.",
+                    "Request sent. The community owner or an appointed administrator must approve it.",
                   );
                 }}
               >
@@ -383,6 +391,10 @@ export function CommunityPage() {
                       <span>
                         Join code: <code>{community.join_code}</code>
                       </span>
+                      <span>Governance: {community.governance_state}</span>
+                      <span>
+                        Community owner: <code>{community.owner_id}</code>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -401,10 +413,44 @@ export function CommunityPage() {
                       <span>
                         {membership.role} — {membership.status}
                       </span>
+                      {state.communities.map((community) =>
+                        canManageAppointedAdministrator(
+                          community,
+                          currentUserId,
+                          membership,
+                        ) ? (
+                          <button
+                            key={community.id}
+                            type="button"
+                            disabled={isPending(
+                              `admin-${membership.community_id}-${membership.user_id}`,
+                            )}
+                            onClick={() =>
+                              void runRpc(
+                                `admin-${membership.community_id}-${membership.user_id}`,
+                                "set_appointed_administrator",
+                                {
+                                  target_community_id: membership.community_id,
+                                  target_user_id: membership.user_id,
+                                  appointed: membership.role !== "admin",
+                                },
+                                membership.role === "admin"
+                                  ? "Appointed administrator removed."
+                                  : "Appointed administrator added.",
+                              )
+                            }
+                          >
+                            {membership.role === "admin"
+                              ? `Remove administrator ${membership.user_id}`
+                              : `Appoint administrator ${membership.user_id}`}
+                          </button>
+                        ) : null,
+                      )}
                       {canApproveMembership(
                         membership,
                         currentUserId,
                         state.memberships,
+                        state.communities,
                       ) && (
                         <button
                           type="button"
@@ -434,14 +480,15 @@ export function CommunityPage() {
             <ItemSection
               communities={state.communities}
               currentUserId={currentUserId}
-              adminCommunityIds={state.memberships
-                .filter(
-                  (membership) =>
-                    membership.user_id === currentUserId &&
-                    membership.role === "admin" &&
-                    membership.status === "active",
+              adminCommunityIds={state.communities
+                .filter((community) =>
+                  hasManagedAdministrationAuthority(
+                    community,
+                    currentUserId,
+                    state.memberships,
+                  ),
                 )
-                .map((membership) => membership.community_id)}
+                .map((community) => community.id)}
             />
             <button
               type="button"

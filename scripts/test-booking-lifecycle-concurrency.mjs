@@ -132,8 +132,8 @@ try {
     [ids.owner, ids.borrower],
   );
   await observer.query(
-    "insert into public.communities (id, name) values ($1, 'Concurrency community')",
-    [ids.community],
+    "insert into public.communities (id, name, owner_id) values ($1, 'Concurrency community', $2)",
+    [ids.community, ids.owner],
   );
   await observer.query(
     `insert into public.memberships (community_id, user_id, role, status) values
