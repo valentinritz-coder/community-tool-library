@@ -18,7 +18,8 @@ Owners may display a simple price per day and settle directly with borrowers out
 - crowdfunding/community purchases;
 - community-owned assets;
 - replacement funds;
-- voting/governance for shared purchases;
+- voting/governance for shared-purchase decisions (this does not exclude the community governance
+  constitution defined in ADR 0005);
 - automated maintenance funds.
 
 ## Physical infrastructure

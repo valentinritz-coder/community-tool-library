@@ -8,9 +8,17 @@ The MVP is successful if it demonstrates real circulation of objects, not merely
 
 ## Actors
 
-### Community administrator
+### Community owner and appointed administrator
 
-Creates/manages a community, moderates membership and can remove inappropriate listings.
+The community owner holds the ownership designation and, while governance is managed, administers
+the community and may appoint or remove operational administrators. Appointed administration is a
+delegated role and is not ownership.
+
+### Elected council member
+
+When a community completes its optional democratic transition, elected council members exercise
+ordinary community administration. Ownership, appointed administration and an electoral mandate
+remain distinct roles; the governance constitution is defined in ADR 0005.
 
 ### Member / owner
 
@@ -57,6 +65,7 @@ A member can be both owner and borrower.
 
 - authentication;
 - community membership and roles;
+- managed ownership/appointed administration and optional democratic council governance;
 - item CRUD with photos;
 - basic search/filtering by name/category;
 - availability representation;
