@@ -18,7 +18,8 @@ values
   ('d0000000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-owner@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
   ('d0000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-borrower@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
   ('d0000000-0000-4000-8000-000000000004','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-member@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
-  ('d0000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-pending@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','','');
+  ('d0000000-0000-4000-8000-000000000005','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-pending@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','',''),
+  ('d0000000-0000-4000-8000-000000000006','00000000-0000-0000-0000-000000000000','authenticated','authenticated','demo-appointed@example.test',crypt('demo-local-only', gen_salt('bf')),now(),now(),now(),'{"provider":"email","providers":["email"]}','{}','','','','');
 
 insert into auth.identities (id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
 select id, id::text, id, jsonb_build_object('sub', id::text, 'email', email), 'email', now(), now(), now()
@@ -30,7 +31,8 @@ insert into public.memberships (community_id,user_id,role,status,display_name,cr
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001','admin','active','Morgan Green',now()),
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','member','active','Alex River',now()),
  ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000003','member','active','Blair Stone',now()),
- ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000004','member','active','Casey Wood',now());
+ ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000004','member','active','Casey Wood',now()),
+ ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000006','admin','active','Taylor Ash',now());
 
 insert into public.items (id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,photo_uploaded,created_at) values
  ('d2000000-0000-4000-8000-000000000001','d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','Compact drill','small_diy','Synthetic low-risk drill listing.','d2000000-0000-4000-8000-000000000001/photo.jpg',true,null,true,now()-interval '4 days'),
