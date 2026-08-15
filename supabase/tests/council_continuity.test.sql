@@ -1,5 +1,5 @@
 begin;
-select plan(61);
+select plan(62);
 
 insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
 select ('60000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
@@ -30,7 +30,7 @@ select '60300000-0000-4000-8000-000000000001','60100000-0000-4000-8000-000000000
 
 select is(public.active_elected_mandate_count('60100000-0000-4000-8000-000000000001'),5,'five mandates start active');
 select is(public.council_vacant_seat_count('60100000-0000-4000-8000-000000000001'),0,'full council has no vacancy');
-select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','5/5 is operational');
+select is(public.get_council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','5/5 is operational');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000001',true);
@@ -44,7 +44,7 @@ select is((select ended_reason::text from public.elected_council_mandates where 
 select is((select count(*) from public.elected_council_mandates where member_id='60000000-0000-4000-8000-000000000001'),1::bigint,'historical mandate remains stored');
 select is((select count(*) from public.council_continuity_history where event='resignation'),1::bigint,'resignation audited once');
 select is(public.council_vacant_seat_count('60100000-0000-4000-8000-000000000001'),1,'vacancy is derived');
-select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','4/5 remains operational');
+select is(public.get_council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','4/5 remains operational');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000002',true);
 select lives_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
@@ -55,7 +55,7 @@ select is((select target_seats from public.election_cycles where community_id='6
 update public.election_cycles set status='failed',completed_at=now()
 where community_id='60100000-0000-4000-8000-000000000001' and purpose='reconstitution' and status='candidacy';
 update public.elected_council_mandates set ended_at=now(),ended_reason='resignation' where member_id='60000000-0000-4000-8000-000000000002';
-select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','3/5 remains operational');
+select is(public.get_council_operational_status('60100000-0000-4000-8000-000000000001')::text,'operational','3/5 remains operational');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000004',true);
 select lives_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
@@ -66,7 +66,7 @@ select is((select target_seats from public.election_cycles where community_id='6
 update public.election_cycles set status='failed',completed_at=now()
 where community_id='60100000-0000-4000-8000-000000000001' and purpose='reconstitution' and status='candidacy';
 update public.elected_council_mandates set ended_at=now(),ended_reason='resignation' where member_id='60000000-0000-4000-8000-000000000003';
-select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'under_strength','2/5 is under strength');
+select is(public.get_council_operational_status('60100000-0000-4000-8000-000000000001')::text,'under_strength','2/5 is under strength');
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000004',true);
 select ok(public.has_temporary_caretaker_authority('60100000-0000-4000-8000-000000000001'),'remaining councillor has caretaker authority');
 select ok(not public.has_elected_council_authority('60100000-0000-4000-8000-000000000001'),'remaining councillor lacks ordinary council authority');
@@ -75,6 +75,8 @@ select ok(not public.is_active_community_admin('60100000-0000-4000-8000-00000000
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000006',true);
 select ok(not public.is_active_community_admin('60100000-0000-4000-8000-000000000001'),'former appointed admin does not revive');
 select lives_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,'active member opens reconstitution');
+select throws_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
+ '55000','A community election cycle is already active','second sequential opener is rejected deterministically');
 set local role postgres;
 select is((select target_seats from public.election_cycles where purpose='reconstitution'),3::smallint,'cycle fills exactly three vacancies');
 select is((select details->>'seats_available' from public.council_continuity_history where event='reconstitution_opened'),'3','opening is audited with vacancy count');
@@ -109,7 +111,7 @@ select lives_ok($$select public.resign_elected_council_mandate('60100000-0000-40
  'fourth councillor resigns self');
 set local role postgres;
 select is(public.active_elected_mandate_count('60100000-0000-4000-8000-000000000001'),1,'one mandate remains active');
-select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'under_strength','one active is under strength');
+select is(public.get_council_operational_status('60100000-0000-4000-8000-000000000001')::text,'under_strength','one active is under strength');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000005',true);
 select ok(public.has_temporary_caretaker_authority('60100000-0000-4000-8000-000000000001'),'last councillor is caretaker');
@@ -135,7 +137,7 @@ select lives_ok($$select public.resign_elected_council_mandate('60100000-0000-40
  'last councillor can resign');
 set local role postgres;
 select is(public.active_elected_mandate_count('60100000-0000-4000-8000-000000000001'),0,'zero mandates remain active');
-select is(public.council_operational_status('60100000-0000-4000-8000-000000000001')::text,'vacant','zero active is vacant');
+select is(public.get_council_operational_status('60100000-0000-4000-8000-000000000001')::text,'vacant','zero active is vacant');
 select is(public.council_vacant_seat_count('60100000-0000-4000-8000-000000000001'),5,'all target seats are vacant');
 select is((select governance_state::text from public.get_council_continuity('60100000-0000-4000-8000-000000000001')),
  'democratic','governance remains democratic');

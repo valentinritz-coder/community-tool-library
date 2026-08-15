@@ -87,17 +87,17 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000001',true);
 select is((select count(*) from public.list_moderation_reports((select c1 from ctx))),2::bigint,'active same-community admin sees reports');
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000002',true);
-select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Active same-community admin required','normal member cannot list reports') from ctx;
+select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Community continuity authority required','normal member cannot list reports') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000005',true);
-select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Active same-community admin required','cross-community admin cannot list reports') from ctx;
+select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Community continuity authority required','cross-community admin cannot list reports') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000006',true);
-select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Active same-community admin required','pending admin cannot list reports') from ctx;
+select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Community continuity authority required','pending admin cannot list reports') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000003',true);
-select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Active same-community admin required','pending member cannot list reports') from ctx;
+select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Community continuity authority required','pending member cannot list reports') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000004',true);
-select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Active same-community admin required','non-member cannot list reports') from ctx;
+select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Community continuity authority required','non-member cannot list reports') from ctx;
 select set_config('request.jwt.claim.sub','',true);
-select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Active same-community admin required','anonymous caller cannot list reports') from ctx;
+select throws_ok(format('select * from public.list_moderation_reports(%L)',c1),'42501','Community continuity authority required','anonymous caller cannot list reports') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000002',true);
 select throws_like('select * from public.moderation_reports','%permission denied%','raw moderation reports are not client-readable');
 select ok(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure) not like '%reporter_id%','admin projection omits reporter_id');
@@ -105,11 +105,11 @@ select ok(pg_get_function_result('public.list_moderation_reports(uuid)'::regproc
 select ok(pg_get_function_result('public.list_moderation_reports(uuid)'::regprocedure) not like '%handled_by%','admin projection omits handled_by');
 
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000005',true);
-select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Active same-community admin and open item report required','cross-community admin cannot hide an item') from ctx;
+select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Community continuity authority and open item report required','cross-community admin cannot hide an item') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000006',true);
-select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Active same-community admin and open item report required','pending admin cannot hide an item') from ctx;
+select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Community continuity authority and open item report required','pending admin cannot hide an item') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000002',true);
-select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Active same-community admin and open item report required','normal member cannot hide an item') from ctx;
+select throws_ok(format('select public.hide_reported_item(%L)',item_report),'42501','Community continuity authority and open item report required','normal member cannot hide an item') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000001',true);
 select lives_ok(format('select public.hide_reported_item(%L)',item_report),'same-community active admin hides an item') from ctx;
 set local role postgres;
@@ -129,6 +129,6 @@ select throws_like(format('update public.items set moderation_hidden=false where
 select lives_ok(format('select public.handle_moderation_report(%L)',counterparty_report),'admin handles counterparty report') from ctx;
 select set_config('request.jwt.claim.sub','90000000-0000-4000-8000-000000000002',true);
 select ok(public.submit_counterparty_report((select booking1 from ctx),'unsafe',null) is not null,'counterparty can be reported again after handling');
-select throws_ok(format('select public.handle_moderation_report(%L)',(select counterparty_report from ctx)),'42501','Active same-community admin required','member cannot handle report');
+select throws_ok(format('select public.handle_moderation_report(%L)',(select counterparty_report from ctx)),'42501','Community continuity authority required','member cannot handle report');
 
 rollback;

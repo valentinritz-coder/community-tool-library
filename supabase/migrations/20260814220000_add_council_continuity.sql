@@ -49,7 +49,7 @@ returns integer language sql stable security definer set search_path='' as $$
   where community_id=target_community_id and ended_at is null;
 $$;
 
-create function public.council_operational_status(target_community_id uuid)
+create function public.get_council_operational_status(target_community_id uuid)
 returns public.council_operational_status language sql stable security definer set search_path='' as $$
   select case
     when public.active_elected_mandate_count(target_community_id)>=3 then 'operational'::public.council_operational_status
@@ -192,6 +192,8 @@ begin
   select * into ec from public.elected_councils where community_id=c.id for update;
   vacancies := ec.target_seats-public.active_elected_mandate_count(c.id);
   if vacancies<=0 then raise exception 'Council has no vacant seats' using errcode='55000'; end if;
+  if exists(select 1 from public.election_cycles where community_id=c.id and status in ('candidacy','voting')) then
+    raise exception 'A community election cycle is already active' using errcode='55000'; end if;
   insert into public.election_cycles(community_id,target_seats,purpose)
     values(c.id,vacancies,'reconstitution') returning id into cycle_id;
   insert into public.council_continuity_history(community_id,council_id,event,election_cycle_id,actor_id,details)
@@ -356,7 +358,7 @@ returns table(governance_state public.community_governance_state,target_seats sm
   may_resign boolean,reconstitution_cycle_id uuid,reconstitution_status public.election_cycle_status)
 language sql stable security definer set search_path='' as $$
   select c.governance_state,ec.target_seats,public.active_elected_mandate_count(c.id),
-    public.council_vacant_seat_count(c.id),public.council_operational_status(c.id),
+    public.council_vacant_seat_count(c.id),public.get_council_operational_status(c.id),
     exists(select 1 from public.elected_council_mandates m where m.community_id=c.id and m.member_id=auth.uid() and m.ended_at is null),
     c.governance_state='democratic' and exists(select 1 from public.elected_council_mandates m where m.community_id=c.id and m.member_id=auth.uid() and m.ended_at is null),
     e.id,e.status from public.communities c join public.elected_councils ec on ec.community_id=c.id
@@ -367,7 +369,7 @@ language sql stable security definer set search_path='' as $$
 $$;
 
 revoke all on function public.active_elected_mandate_count(uuid) from public;
-revoke all on function public.council_operational_status(uuid) from public;
+revoke all on function public.get_council_operational_status(uuid) from public;
 revoke all on function public.council_vacant_seat_count(uuid) from public;
 revoke all on function public.has_community_continuity_authority(uuid) from public;
 revoke all on function public.resign_elected_council_mandate(uuid) from public;

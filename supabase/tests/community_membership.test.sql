@@ -44,7 +44,7 @@ select throws_ok(
 select throws_ok(
   format('select public.approve_membership(%L, %L)', (select id from test_community), '10000000-0000-4000-8000-000000000002'),
   '42501',
-  'Only an active community admin can approve memberships',
+  'Community continuity authority required',
   'a pending member cannot activate themselves'
 );
 
@@ -93,7 +93,7 @@ select throws_ok(
     '10000000-0000-4000-8000-000000000003'
   ),
   '42501',
-  'Only an active community admin can approve memberships',
+  'Community continuity authority required',
   'the Riverside admin cannot approve a real pending Hilltop membership'
 );
 

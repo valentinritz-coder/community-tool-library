@@ -68,7 +68,7 @@ select is((select count(*) from public.elected_council_mandates where community_
 select is((select count(*) from public.elected_council_mandates where community_id='61100000-0000-4000-8000-000000000001'
  and member_id='61000000-0000-4000-8000-000000000001' and ended_at is null),1::bigint,'existing mandate is preserved');
 select is((select count(*) from public.elected_councils where community_id='61100000-0000-4000-8000-000000000001'),1::bigint,'existing council institution is preserved');
-select is(public.council_operational_status('61100000-0000-4000-8000-000000000001')::text,'operational','three active restores operation');
+select is(public.get_council_operational_status('61100000-0000-4000-8000-000000000001')::text,'operational','three active restores operation');
 select is((select governance_state::text from public.communities where id='61100000-0000-4000-8000-000000000001'),'democratic','reconstitution remains democratic');
 
 -- Failed quorum preserves the single active mandate and permits a later member-driven cycle.
@@ -112,7 +112,7 @@ set local role service_role;
 select is(public.finalize_reconstitution_round(current_setting('test.partial_round')::uuid)::text,'completed','one positive winner is a valid partial fill');
 set local role postgres;
 select is(public.active_elected_mandate_count('61100000-0000-4000-8000-000000000003'),2,'partial fill produces two active mandates total');
-select is(public.council_operational_status('61100000-0000-4000-8000-000000000003')::text,'under_strength','partial fill remains under strength');
+select is(public.get_council_operational_status('61100000-0000-4000-8000-000000000003')::text,'under_strength','partial fill remains under strength');
 
 -- A target-five council with two vacancies enforces max approvals = two.
 set local role authenticated;

@@ -193,7 +193,7 @@ try {
   );
   await waitForLock(observer, secondPid, "open_council");
   await first.query("commit");
-  assert.equal((await doubleOpen)?.code, "23505");
+  assert.equal((await doubleOpen)?.code, "55000");
   await second.query("rollback");
   const resignOpen = await fixture(observer, 4);
   await Promise.all([asUser(first, users[0]), asUser(second, users[3])]);
