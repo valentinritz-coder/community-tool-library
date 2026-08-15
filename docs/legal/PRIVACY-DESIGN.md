@@ -50,8 +50,8 @@ has no deletion scheduler, lifecycle worker, complete account-erasure flow, or l
 | Moderation report UUID, community, reporter UUID, item or booking-derived counterparty target, structured reason, optional note, status, timestamps, handling admin UUID and action | `moderation_reports`; submission and narrow admin RPCs | Let participants flag visible listings or a counterparty they encountered, and let the relevant community respond | Identifiers remain in the server-only table. Only active same-community admins receive the narrow queue (target label/item capability, reason, note, status/date/action); it omits reporter, counterparty, and handling-admin UUIDs. Item reports require currently visible inventory. Counterparty reports require current active membership, accept only a booking UUID, and derive the other participant server-side. Notes are untrusted text, trimmed and limited to 500 characters. | Retained with parent records indefinitely today; there is no deletion scheduler or reviewed retention period. `RESTRICT` references can block deletion of referenced accounts, items, and bookings until a future controlled procedure addresses the reports. Handled reports remain as a minimal operational trace. | **REQUIRES LEGAL REVIEW:** lawful basis/notice, administrator access, an appropriate retention period and deletion handling. |
 | Technical RLS proof UUID, owner UUID, short body | `rls_validation_notes` | Repository infrastructure validation only; not an MVP user flow | Only the authenticated row owner | The production-facing migration still creates this proof table; no UI writes it and no cleanup automation exists. Do not use it for pilot content. | Decide operationally whether to remove this technical proof before production; legal review only if it will contain real data. |
 
-The schema contains no display name, approximate area, address/pickup-location field, phone number,
-identity/residence document, analytics event store, payment/deposit record, or
+The schema contains a community-scoped display name, but no approximate area,
+address/pickup-location field, phone number, identity/residence document, analytics event store, payment/deposit record, or
 insurance record. Those categories are therefore deliberately excluded from the inventory rather
 than documented as if collected.
 
@@ -94,3 +94,27 @@ by issue #29.
 
 The tests are regression evidence for implemented authorization, not a security certification or
 legal-compliance assessment.
+
+## Governance privacy inventory (M5.5)
+
+Governance uses community-facing `memberships.display_name` values (or opaque member suffixes), not
+authentication email addresses. The following inventory records the application boundary audited
+for issue #58. “Internal” means browser roles have neither table privileges nor an RPC that returns
+the row shape.
+
+| Category | Purpose and classification | Application exposure and actor visibility | MVP retention expectation |
+|---|---|---|---|
+| Community governance fields (`owner_id`, state, council target, active cycle) | Authoritative active operational state and irreversible-transition audit context | Active members receive the minimum state/capability projection. Owner identity is a community display name; outsiders receive no row. Direct writes are denied. | Retain with the community. State/history must outlive a transition so a former owner cannot manufacture rollback. |
+| Membership and `display_name` | Eligibility, authority and community-facing identity; active operational data | A member sees their own membership; continuity-authorized actors see the operational membership queue. Governance projections expose display names/opaque fallbacks only within the community. Auth email is not a community identity. | Retain with membership under the unresolved membership schedule above. |
+| Cycles, candidacies, candidate and electorate snapshots | Run elections and preserve authoritative eligibility; active data followed by historical governance record | Narrow member projection exposes cycle state and candidate community identities. Raw tables and the electorate UUID ledger are internal. Snapshots remain immutable after freeze. | Retain with the community as the evidence needed to explain eligibility and results; no automated purge exists. |
+| Rounds, aggregate candidate results and winners | Quorum, deterministic result, runoff and installation; historical governance record | Active members may receive round status, aggregate turnout/quorum and aggregate candidate results. No ballot choice is returned. | Retain with the election/council history; no automated purge exists. |
+| Ballots | Enforce one ballot per electorate member/round; **sensitive ballot data** | Internal. The governance projection may return only whether the current caller's ballot was recorded and aggregate turnout. It does not return another voter's participation row. | Retained with the election today to enforce uniqueness and support authoritative counting. Any later deletion/anonymisation design needs a dedicated reviewed migration. |
+| Ballot approvals | Count approvals; **most sensitive ballot data** because joining it to ballots creates voter-to-choice mapping | Internal only. `anon` and `authenticated` have no `SELECT`; no member/owner/admin/caretaker/councillor RPC or projection returns approval arrays or a voter-to-candidate ledger. | Retained internally with the election today. Operators must restrict database/service-role access and must not export it into logs, traces or routine support artifacts. |
+| Elected councils and mandates | Establish current authority, term and vacancy count; active and historical governance record | Active members receive current elected community identities, term/status and vacancy totals. Ended mandates remain internal history; no free-text resignation reason exists. | Retain with the community to prove the source and end of authority. |
+| Resignation/continuity history (`ended_at`, `ended_reason`, audit actor/details) | Prove mandate termination and deterministic reconstitution; historical governance/audit record | Member UI receives the resulting active count/status, not raw actor/audit rows. Internal history stores structured events only. | Retain with council history; no automated purge exists. Review before public pilot together with membership/account erasure. |
+| Logs, CI artifacts, demo and test data | Diagnose synthetic validation, not a product record | Fixtures use reserved synthetic identities. Tests assert states/counts and avoid printing selections, credentials, tokens or a voter-to-choice export. Failure screenshots/traces remain access-controlled CI artifacts and should be deleted under the CI provider policy. | Keep only as long as needed to diagnose a run; do not promote test artifacts into governance records. |
+
+The MVP provides **application-level ballot confidentiality/privacy**. It does **not** claim a
+cryptographic secret ballot, coercion resistance, or end-to-end verifiability. Database operators
+and tightly controlled service credentials necessarily sit outside the ordinary application actor
+boundary. Cryptographic voting is deliberately out of scope.

@@ -1,6 +1,6 @@
 begin;
 
-select plan(57);
+select plan(64);
 
 insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
 select ('56000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid,
@@ -40,6 +40,25 @@ select lives_ok($$select public.begin_democratic_preparation('56100000-0000-4000
 select is((select governance_state::text from public.communities where id='56100000-0000-4000-8000-000000000001'),'democratic_preparation','state enters preparation');
 set local role postgres;
 select is((select target_seats from public.election_cycles where id=(select active_election_cycle_id from public.communities where id='56100000-0000-4000-8000-000000000001')),5::smallint,'cycle is authoritative target');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000002',true);
+select throws_ok($$select public.change_preparation_council_target('56100000-0000-4000-8000-000000000001',3)$$,
+ '42501','Only the community owner can change the council target','appointed admin cannot change preparation target');
+select throws_ok($$select public.cancel_democratic_preparation('56100000-0000-4000-8000-000000000001')$$,
+ '42501','Only the community owner can cancel democratic preparation','appointed admin cannot cancel preparation');
+select throws_ok($$select public.commit_democratic_transfer('56100000-0000-4000-8000-000000000001')$$,
+ '42501','Only the community owner can commit democratic transfer','appointed admin cannot commit transfer');
+select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000006',true);
+select throws_ok($$select public.change_preparation_council_target('56100000-0000-4000-8000-000000000001',3)$$,
+ '42501','Only the community owner can change the council target','ordinary member cannot change preparation target');
+select throws_ok($$select public.cancel_democratic_preparation('56100000-0000-4000-8000-000000000001')$$,
+ '42501','Only the community owner can cancel democratic preparation','ordinary member cannot cancel preparation');
+select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000009',true);
+select throws_ok($$select public.change_preparation_council_target('56100000-0000-4000-8000-000000000001',3)$$,
+ '42501','Only the community owner can change the council target','outsider cannot change preparation target');
+select throws_ok($$select public.cancel_democratic_preparation('56100000-0000-4000-8000-000000000001')$$,
+ '42501','Only the community owner can cancel democratic preparation','outsider cannot cancel preparation');
+select set_config('request.jwt.claim.sub','56000000-0000-4000-8000-000000000001',true);
 set local role authenticated;
 select lives_ok($$select public.change_preparation_council_target('56100000-0000-4000-8000-000000000001',3)$$,'owner atomically changes target');
 set local role postgres;

@@ -44,7 +44,7 @@ try {
   `);
   assert.deepEqual(result.rows[0], {
     communities: 1,
-    memberships: 4,
+    memberships: 5,
     items: 4,
     bookings: 5,
     evidence: 2,
@@ -53,7 +53,7 @@ try {
     governance_state: "managed",
   });
   console.log(
-    "Local synthetic demo loaded and verified (1 community, 4 memberships, 4 items, 5 bookings, 2 evidence records, 1 report).",
+    "Local synthetic demo loaded and verified (1 community, 5 memberships, 4 items, 5 bookings, 2 evidence records, 1 report).",
   );
 } finally {
   await client.end().catch(() => undefined);

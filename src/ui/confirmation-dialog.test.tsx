@@ -30,6 +30,10 @@ describe("ConfirmationDialog", () => {
     );
     const dialog = screen.getByRole("alertdialog");
     expect(dialog).toHaveFocus();
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Action in progress. Dialog controls are temporarily unavailable.",
+    );
     fireEvent.keyDown(dialog, { key: "Tab" });
     expect(dialog).toHaveFocus();
   });
