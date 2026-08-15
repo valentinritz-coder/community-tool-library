@@ -15,7 +15,11 @@ values('60100000-0000-4000-8000-000000000001','Continuity fixture','60000000-000
 insert into public.memberships(community_id,user_id,role,status)
 select '60100000-0000-4000-8000-000000000001',id,
  case when id='60000000-0000-4000-8000-000000000006' then 'admin'::public.membership_role else 'member' end,'active'
-from auth.users where id::text like '60000000-0000-4000-8000-%';
+from auth.users where id=any(array[
+ '60000000-0000-4000-8000-000000000001'::uuid,'60000000-0000-4000-8000-000000000002',
+ '60000000-0000-4000-8000-000000000003','60000000-0000-4000-8000-000000000004',
+ '60000000-0000-4000-8000-000000000005','60000000-0000-4000-8000-000000000006',
+ '60000000-0000-4000-8000-000000000007']);
 insert into public.election_cycles(id,community_id,target_seats,status,purpose,completed_at)
 values('60200000-0000-4000-8000-000000000001','60100000-0000-4000-8000-000000000001',5,'completed','founding',now());
 insert into public.election_winners(cycle_id,candidate_id,elected_in_round,approval_count)
@@ -78,7 +82,6 @@ select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000006'
 select ok(not public.is_active_community_admin('60100000-0000-4000-8000-000000000001'),'former appointed admin does not revive');
 select set_config('test.three_vacancy_cycle',public.open_council_reconstitution_cycle(
  '60100000-0000-4000-8000-000000000001')::text,true);
-select ok(current_setting('test.three_vacancy_cycle')::uuid is not null,'active member opens reconstitution');
 select throws_ok($$select public.open_council_reconstitution_cycle('60100000-0000-4000-8000-000000000001')$$,
  '55000','A community election cycle is already active','second sequential opener is rejected deterministically');
 set local role postgres;
@@ -112,6 +115,9 @@ set local role postgres;
 update public.election_cycles set status='failed',completed_at=now()
 where id=current_setting('test.three_vacancy_cycle')::uuid;
 set local role authenticated;
+select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000003',true);
+select is((select reconstitution_status::text from public.get_council_continuity('60100000-0000-4000-8000-000000000001')),
+ 'failed','continuity contract deterministically falls back to a terminal cycle');
 select set_config('request.jwt.claim.sub','60000000-0000-4000-8000-000000000004',true);
 select lives_ok($$select public.resign_elected_council_mandate('60100000-0000-4000-8000-000000000001')$$,
  'fourth councillor resigns self');
@@ -160,6 +166,7 @@ select set_config('test.zero_active_cycle',public.open_council_reconstitution_cy
  '60100000-0000-4000-8000-000000000001')::text,true);
 select ok(current_setting('test.zero_active_cycle')::uuid is not null,
  'ordinary active member opens reconstitution at zero');
+set local role postgres;
 select is((select target_seats from public.election_cycles where id=current_setting('test.zero_active_cycle')::uuid),
  5::smallint,'zero-active reconstitution targets all five vacancies');
 

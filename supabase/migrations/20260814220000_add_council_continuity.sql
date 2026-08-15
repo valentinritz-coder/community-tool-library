@@ -363,7 +363,8 @@ language sql stable security definer set search_path='' as $$
     c.governance_state='democratic' and exists(select 1 from public.elected_council_mandates m where m.community_id=c.id and m.member_id=auth.uid() and m.ended_at is null),
     e.id,e.status from public.communities c join public.elected_councils ec on ec.community_id=c.id
     left join lateral (select x.id,x.status from public.election_cycles x where x.community_id=c.id and x.purpose='reconstitution'
-      order by x.created_at desc limit 1) e on true
+      order by case when x.status in ('candidacy','voting') then 0 else 1 end,
+        x.created_at desc,x.id desc limit 1) e on true
   where c.id=target_community_id and exists(select 1 from public.memberships m
     where m.community_id=c.id and m.user_id=auth.uid() and m.status='active');
 $$;
