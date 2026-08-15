@@ -95,7 +95,14 @@ try {
     second.connect(),
     third.connect(),
   ]);
+  await Promise.all(
+    [observer, first, second, third].map((client) =>
+      client.query("set statement_timeout='15s'; set lock_timeout='10s'"),
+    ),
+  );
   const secondPid = (await second.query("select pg_backend_pid() pid")).rows[0]
+    .pid;
+  const thirdPid = (await third.query("select pg_backend_pid() pid")).rows[0]
     .pid;
   await observer.query(
     `insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
@@ -103,6 +110,7 @@ try {
     [users],
   );
 
+  console.log("[1/8] duplicate resignation");
   // Same mandate: the community lock serializes both calls and only one resignation is audited.
   const same = await fixture(observer, 1);
   await Promise.all([asUser(first, users[0]), asUser(second, users[0])]);
@@ -124,16 +132,17 @@ try {
     1,
   );
 
+  console.log("[2/8] concurrent councillor resignations");
   // Different councillors can resign concurrently without reviving managed governance.
   const multiple = await fixture(observer, 2);
   await Promise.all([asUser(first, users[0]), asUser(second, users[1])]);
-  const a = first.query("select public.resign_elected_council_mandate($1)", [
+  await first.query("select public.resign_elected_council_mandate($1)", [
     multiple,
   ]);
   const b = second.query("select public.resign_elected_council_mandate($1)", [
     multiple,
   ]);
-  await a;
+  await waitForLock(observer, secondPid, "resign_elected");
   await first.query("commit");
   await b;
   await second.query("commit");
@@ -145,6 +154,7 @@ try {
   ).rows[0];
   assert.deepEqual(state, { state: "democratic", active: 1 });
 
+  console.log("[3/8] resignations to zero");
   // Three committed resignations may safely leave a democratic council completely vacant.
   const vacant = await fixture(observer, 7);
   await Promise.all([
@@ -152,21 +162,21 @@ try {
     asUser(second, users[1]),
     asUser(third, users[2]),
   ]);
-  const resignFirst = first.query(
-    "select public.resign_elected_council_mandate($1)",
-    [vacant],
-  );
+  await first.query("select public.resign_elected_council_mandate($1)", [
+    vacant,
+  ]);
   const resignSecond = second.query(
     "select public.resign_elected_council_mandate($1)",
     [vacant],
   );
+  await waitForLock(observer, secondPid, "resign_elected");
+  await first.query("commit");
+  await resignSecond;
   const resignThird = third.query(
     "select public.resign_elected_council_mandate($1)",
     [vacant],
   );
-  await resignFirst;
-  await first.query("commit");
-  await resignSecond;
+  await waitForLock(observer, thirdPid, "resign_elected");
   await second.query("commit");
   await resignThird;
   await third.query("commit");
@@ -180,7 +190,7 @@ try {
     { state: "democratic", active: 0 },
   );
 
-  // Opening twice and resignation-vs-open both serialize on the community row.
+  console.log("[4/8] duplicate reconstitution open");
   const opening = await fixture(observer, 3, 2, 3);
   await Promise.all([asUser(first, users[3]), asUser(second, users[4])]);
   await first.query("select public.open_council_reconstitution_cycle($1)", [
@@ -211,6 +221,8 @@ try {
     ).rows[0],
     { n: 1, target: 1 },
   );
+
+  console.log("[5/8] resignation vs reconstitution open");
   const resignOpen = await fixture(observer, 4);
   await Promise.all([asUser(first, users[0]), asUser(second, users[3])]);
   await first.query("select public.resign_elected_council_mandate($1)", [
@@ -234,7 +246,7 @@ try {
     1,
   );
 
-  // Exactly-once finalization and finalization-vs-resignation cannot overfill the target.
+  console.log("[6/8] cross-community install rejection");
   const installing = await fixture(observer, 5, 1, 3);
   const cycle = await completedReconstitution(
     observer,
@@ -253,6 +265,8 @@ try {
     )?.code,
     "55000",
   );
+
+  console.log("[7/8] duplicate install");
   await Promise.all([first.query("begin"), second.query("begin")]);
   await first.query("select public.install_reconstitution_winners($1,$2)", [
     installing,
@@ -278,6 +292,7 @@ try {
     3,
   );
 
+  console.log("[8/8] install vs resignation");
   const changingVacancy = await fixture(observer, 6, 2, 3);
   const oneWinner = await completedReconstitution(observer, changingVacancy, [
     users[2],
