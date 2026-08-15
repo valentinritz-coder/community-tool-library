@@ -42,7 +42,57 @@ describe("CommunityPage", () => {
     getSession.mockResolvedValue({ data: { session: null } });
     signInWithPassword.mockResolvedValue({ error: null });
     resetPasswordForEmail.mockResolvedValue({ error: null });
-    rpc.mockResolvedValue({ error: null });
+    rpc.mockImplementation((functionName: string) =>
+      functionName === "get_community_governance_ui"
+        ? Promise.resolve({
+            data: [
+              {
+                community_id: "community-a",
+                governance_state: "managed",
+                is_owner: true,
+                owner_label: "Morgan Green",
+                current_user_label: "River Member",
+                current_membership_role: "member",
+                appointed_admins: [],
+                may_manage_appointed_admins: true,
+                may_approve_memberships: true,
+                may_moderate_community: true,
+                council_target: null,
+                may_commit_founding_transfer: false,
+                commit_blocker: null,
+                cycle_id: null,
+                cycle_status: null,
+                cycle_seats_to_fill: null,
+                valid_candidate_count: 0,
+                may_launch_current_election: false,
+                launch_blocker: null,
+                candidates: [],
+                current_user_is_candidate: false,
+                round_id: null,
+                round_number: null,
+                round_status: null,
+                seats_available: null,
+                current_user_may_vote: false,
+                current_user_ballot_recorded: false,
+                active_mandates: null,
+                elected_members: [],
+                vacant_seats: null,
+                operational_status: null,
+                current_user_has_mandate: false,
+                may_resign: false,
+                council_took_office_at: null,
+                council_term_ends_at: null,
+                latest_election_status: null,
+                latest_round_status: null,
+                latest_ballot_count: null,
+                latest_electorate_count: null,
+                latest_quorum_threshold: null,
+              },
+            ],
+            error: null,
+          })
+        : Promise.resolve({ error: null }),
+    );
     communityQuery.order.mockResolvedValue({ data: [], error: null });
     membershipSelect.mockResolvedValue({ data: [], error: null });
   });
@@ -219,7 +269,7 @@ describe("CommunityPage", () => {
     });
     render(<CommunityPage />);
 
-    expect(await screen.findByText("Community owner:")).toBeInTheDocument();
+    expect(await screen.findByText("Morgan Green — you")).toBeInTheDocument();
     const appoint = screen.getByRole("button", {
       name: "Appoint administrator member-a",
     });

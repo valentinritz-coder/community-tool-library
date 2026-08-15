@@ -105,8 +105,83 @@ button {
 }
 
 button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.65;
+}
+
+.governance-grid,
+.governance-community,
+.governance-subsection,
+.governance-actions {
+  display: grid;
+  gap: 1rem;
+}
+
+.governance-community {
+  border-top: 2px solid #cbd8d4;
+  padding-top: 1.25rem;
+}
+
+.governance-community h3,
+.governance-community h4,
+.governance-community p {
+  margin-block: 0;
+}
+
+.governance-facts {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  margin: 0;
+}
+
+.governance-facts div,
+.status-panel {
+  background: #f4f8f6;
+  border-left: 0.3rem solid var(--accent);
+  padding: 0.9rem;
+}
+
+.governance-facts dt {
+  font-weight: 700;
+}
+
+.governance-facts dd {
+  margin: 0.35rem 0 0;
+}
+
+.plain-list {
+  margin-block: 0;
+}
+
+.dialog-backdrop {
+  align-items: center;
+  background: rgb(24 51 45 / 75%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 10;
+}
+
+.confirmation-dialog {
+  background: white;
+  border: 0.2rem solid var(--accent-dark);
+  border-radius: 0.9rem;
+  box-shadow: 0 1rem 3rem rgb(0 0 0 / 35%);
+  display: grid;
+  gap: 1rem;
+  max-height: calc(100vh - 2rem);
+  max-width: 38rem;
+  overflow: auto;
+  padding: 1.5rem;
+  width: 100%;
+}
+
+.confirmation-dialog h2,
+.confirmation-dialog p {
+  margin: 0;
 }
 
 .visually-hidden {
