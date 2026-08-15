@@ -507,9 +507,9 @@ Notes:
 
 Record every material defect discovered during the protocol.
 
-| ID | Scenario | Severity | Finding | Fix / decision | Re-test result |
-| --- | --- | --- | --- | --- | --- |
-| | | | | | |
+| ID  | Scenario | Severity | Finding | Fix / decision | Re-test result |
+| --- | -------- | -------- | ------- | -------------- | -------------- |
+|     |          |          |         |                |                |
 
 Suggested severity:
 
@@ -530,3 +530,46 @@ Complete after all mandatory scenarios have been executed.
 Final manual accessibility gate: `PENDING`
 
 Do not change the final gate to `PASS` until the completion rule at the top of this document is satisfied.
+
+---
+
+# Governance-focused protocol (issue #58)
+
+Run this matrix against a freshly reset local Supabase demo using keyboard-only, then Windows NVDA
+with Firefox or Chrome. Repeat representative rows at 200% browser zoom and at a 320 CSS-pixel
+viewport. For every row record focus order, visible focus, control name/state, status/error
+announcement, reflow, and whether the task can be completed without a pointer. Never infer an NVDA
+result from an automated semantic test.
+
+|   # | Required state / task          | Expected accessible evidence                                                                                        | Keyboard | NVDA    | 200% / mobile | Notes |
+| --: | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------- | ----- |
+|   1 | Managed governance             | State, owner and appointed admins are named; owner controls follow logical order.                                   | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   2 | Democratic preparation         | Reversible status and 3/5 target are announced without colour dependence.                                           | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   3 | Zero candidates                | Candidate minimum and managed authority are perceivable.                                                            | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   4 | One candidate                  | Count and two-more-needed blocker are perceivable.                                                                  | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   5 | Two candidates                 | Count and one-more-needed blocker are perceivable.                                                                  | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   6 | Three or more candidates       | Each identity and readiness status are navigable; no slate language is used.                                        | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   7 | Blocked commitment             | Disabled/failed action has a useful programmatic explanation.                                                       | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   8 | Irreversible confirmation      | Cancel receives safe initial focus; Tab is contained; Escape cancels; pending state retains focus and is announced. | NOT RUN  | NOT RUN | NOT RUN       |       |
+|   9 | Stand / withdraw candidacy     | Buttons have explicit names and resulting status is announced.                                                      | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  10 | Voting                         | Candidate choices form one named group and expose checked state.                                                    | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  11 | Approval limit                 | Seats/limit instructions and over-selection error identify the candidate group.                                     | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  12 | Ballot submitted               | Only “ballot recorded” is announced; selected choices are not replayed.                                             | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  13 | Failed quorum                  | Result says transition remains committed and does not imply managed rollback.                                       | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  14 | Insufficient winners           | Result explains no council was installed and transition remains committed.                                          | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  15 | Runoff                         | Runoff and its limited candidate set/seat count are announced.                                                      | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  16 | Operational democratic council | Council members, 3/5 target, vacancies and ordinary authority are understandable.                                   | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  17 | Councillor resignation         | Safe initial focus and immediate/vacancy/reconstitution consequences are announced.                                 | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  18 | Under-strength council         | “Reconstitution required” and caretaker-only authority are explicit.                                                | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  19 | Vacant council                 | Democratic continuity, lack of former-owner fallback and member path are explicit.                                  | NOT RUN  | NOT RUN | NOT RUN       |       |
+|  20 | Reconstitution / by-election   | Member can open, stand and vote; exact vacancies/approval limit and restoration status are announced.               | NOT RUN  | NOT RUN | NOT RUN       |       |
+
+## Governance evidence status for issue #58
+
+- Automated component coverage verifies labels/group semantics, status and error live regions,
+  safe confirmation focus, Tab containment, pending focus, pending announcement and restoration.
+- This environment has no Windows desktop or NVDA installation. Consequently **no manual NVDA,
+  keyboard, 200% zoom, or mobile evidence was performed for issue #58**, and every cell above
+  intentionally remains `NOT RUN`.
+- A human tester on Windows/NVDA must execute and record the matrix before representing the manual
+  accessibility gate as passed. Material findings require fixes and a recorded re-test.

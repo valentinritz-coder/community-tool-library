@@ -69,9 +69,15 @@ export function ConfirmationDialog({
         aria-modal="true"
         aria-labelledby="confirmation-title"
         aria-describedby="confirmation-description"
+        aria-busy={pending}
       >
         <h2 id="confirmation-title">{title}</h2>
         <p id="confirmation-description">{description}</p>
+        {pending && (
+          <p className="sr-only" role="status" aria-live="polite">
+            Action in progress. Dialog controls are temporarily unavailable.
+          </p>
+        )}
         <div className="actions">
           <button disabled={pending} onClick={onConfirm}>
             {confirmLabel}
