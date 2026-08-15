@@ -278,20 +278,24 @@ test.describe.serial("governance constitutional journeys", () => {
     const resignedAuthority = await asActor<{
       ordinary: boolean;
       caretaker: boolean;
-      mandate_ended: boolean;
     }>(
       users.candidateThree,
       `select public.has_elected_council_authority($1) ordinary,
-        public.has_temporary_caretaker_authority($1) caretaker,
-        exists(select 1 from public.elected_council_mandates
-          where community_id=$1 and member_id=auth.uid() and ended_at is not null) mandate_ended`,
+        public.has_temporary_caretaker_authority($1) caretaker`,
       [communityId],
     );
     expect(resignedAuthority[0]).toEqual({
       ordinary: false,
       caretaker: false,
-      mandate_ended: true,
     });
+    const endedMandate = await withDatabase(async (client) =>
+      client.query(
+        `select exists(select 1 from public.elected_council_mandates
+          where community_id=$1 and member_id=$2 and ended_at is not null) mandate_ended`,
+        [communityId, users.candidateThree],
+      ),
+    );
+    expect(endedMandate.rows[0].mandate_ended).toBe(true);
     const remainingAuthority = await asActor<{
       ordinary: boolean;
       caretaker: boolean;
