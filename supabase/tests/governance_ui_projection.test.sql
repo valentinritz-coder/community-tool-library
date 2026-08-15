@@ -1,5 +1,5 @@
 begin;
-select plan(22);
+select plan(31);
 
 insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
 select ('57000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
@@ -28,7 +28,29 @@ select public.stand_for_election((select cycle_id from public.get_community_gove
 select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000002',true);
 select public.stand_for_election((select cycle_id from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')));
 select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000003',true);
-select public.stand_for_election((select cycle_id from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')));
+select lives_ok($$select public.stand_for_election((select cycle_id from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')))$$,
+ 'a missing display name does not affect election eligibility');
+select is((select current_user_label from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')),
+ 'Community member • 0003','a historical membership without a display name keeps a privacy-safe fallback');
+select is(public.set_community_display_name('57100000-0000-4000-8000-000000000001','  Cedar Member  '),
+ 'Cedar Member','an active member can set and whitespace-trim their own community display name');
+select is((select current_user_label from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')),
+ 'Cedar Member','the new display name appears in the member-scoped read model');
+select throws_ok($$select public.set_community_display_name('57100000-0000-4000-8000-000000000001','x')$$,
+ '22023','Display name must contain between 2 and 80 characters','a one-character display name is rejected');
+select throws_ok($$select public.set_community_display_name('57100000-0000-4000-8000-000000000001',repeat('x',81))$$,
+ '22023','Display name must contain between 2 and 80 characters','a display name over 80 characters is rejected');
+set local role postgres;
+select is((select display_name from public.memberships where community_id='57100000-0000-4000-8000-000000000001'
+ and user_id='57000000-0000-4000-8000-000000000001'),'Oak Owner',
+ 'updating a display name cannot modify another community member');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000006',true);
+select throws_ok($$select public.set_community_display_name('57100000-0000-4000-8000-000000000001','Outsider Name')$$,
+ '42501','Active community membership required','an outsider cannot set a community display name');
+select ok(not has_function_privilege('anon','public.set_community_display_name(uuid,text)','execute')
+ and has_function_privilege('authenticated','public.set_community_display_name(uuid,text)','execute'),
+ 'only authenticated users receive the display-name RPC boundary');
 
 select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000001',true);
 select lives_ok($$select * from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')$$,
@@ -49,7 +71,7 @@ select ok((select may_approve_memberships from public.get_community_governance_u
 select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000001',true);
 select is((select jsonb_array_length(candidates) from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')),
  3,'all individual candidates are projected');
-select ok((select candidates @> '[{"label":"Community member • 0003"}]'::jsonb
+select ok((select candidates @> '[{"label":"Cedar Member"}]'::jsonb
  from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')),
  'candidate identity is readable and stable');
 select ok(not (select may_commit_founding_transfer from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001')),

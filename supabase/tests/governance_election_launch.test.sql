@@ -45,12 +45,17 @@ select ok((select may_approve_memberships and may_moderate_community from public
 select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000004',true);
 select set_config('test.retry_round',public.launch_current_election('58100000-0000-4000-8000-000000000001','58200000-0000-4000-8000-000000000002')::text,true);
 select ok(current_setting('test.retry_round')::uuid is not null,'ordinary active member launches founding retry');
+set local role postgres;
 select is((select status::text from public.election_cycles where id='58200000-0000-4000-8000-000000000002'),'voting','retry cycle enters voting');
 select is((select seats_available from public.election_rounds where id=current_setting('test.retry_round')::uuid),3::smallint,'retry round fills founding target');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000004',true);
 select lives_ok($$select public.submit_election_ballot(current_setting('test.retry_round')::uuid,array['58000000-0000-4000-8000-000000000001'::uuid])$$,'retry ballot submission works');
 select throws_ok($$select public.launch_current_election('58100000-0000-4000-8000-000000000001','58200000-0000-4000-8000-000000000002')$$,
  '55000','Authoritative candidacy cycle required','repeated launch creates no second round');
+set local role postgres;
 select is((select count(*) from public.election_rounds where cycle_id='58200000-0000-4000-8000-000000000002'),1::bigint,'retry has exactly one first round');
+set local role authenticated;
 select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000008',true);
 select throws_ok($$select public.launch_current_election('58100000-0000-4000-8000-000000000001','58200000-0000-4000-8000-000000000002')$$,
  '42501','Active community membership required','cross-community launch is rejected');
@@ -61,16 +66,23 @@ select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000004'
 select public.stand_for_election(current_setting('test.reconstitution_cycle')::uuid);
 select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000005',true);
 select public.stand_for_election(current_setting('test.reconstitution_cycle')::uuid);
+select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000006',true);
+select public.stand_for_election(current_setting('test.reconstitution_cycle')::uuid);
 select is((select cycle_seats_to_fill from public.get_community_governance_ui('58100000-0000-4000-8000-000000000002')),2::smallint,'read model projects exactly two vacancies before voting');
-select is((select valid_candidate_count from public.get_community_governance_ui('58100000-0000-4000-8000-000000000002')),2,'read model counts eligible reconstitution candidates');
+select is((select valid_candidate_count from public.get_community_governance_ui('58100000-0000-4000-8000-000000000002')),3,'read model counts eligible reconstitution candidates');
 select ok((select may_launch_current_election from public.get_community_governance_ui('58100000-0000-4000-8000-000000000002')),'active member may launch reconstitution');
 select set_config('test.reconstitution_round',public.launch_current_election('58100000-0000-4000-8000-000000000002',current_setting('test.reconstitution_cycle')::uuid)::text,true);
+set local role postgres;
 select is((select status::text from public.election_cycles where id=current_setting('test.reconstitution_cycle')::uuid),'voting','reconstitution enters voting');
 select is((select seats_available from public.election_rounds where id=current_setting('test.reconstitution_round')::uuid),2::smallint,'reconstitution round fills only vacancies');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000005',true);
 select lives_ok($$select public.submit_election_ballot(current_setting('test.reconstitution_round')::uuid,array['58000000-0000-4000-8000-000000000004'::uuid,'58000000-0000-4000-8000-000000000005'::uuid])$$,'reconstitution voting works');
+select set_config('request.jwt.claim.sub','58000000-0000-4000-8000-000000000006',true);
 select throws_ok($$select public.submit_election_ballot(current_setting('test.reconstitution_round')::uuid,array[
  '58000000-0000-4000-8000-000000000004'::uuid,'58000000-0000-4000-8000-000000000005'::uuid,'58000000-0000-4000-8000-000000000006'::uuid])$$,
- '23505',null,'one voter still gets one ballot per round');
+ '22023','Too many approvals','a different elector cannot approve more candidates than seats being filled');
+set local role postgres;
 select is((select count(*) from public.election_rounds where cycle_id=current_setting('test.reconstitution_cycle')::uuid),1::bigint,'reconstitution has exactly one first round');
 
 set local role postgres;

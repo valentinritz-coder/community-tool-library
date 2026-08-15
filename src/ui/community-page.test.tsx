@@ -51,6 +51,7 @@ describe("CommunityPage", () => {
                 governance_state: "managed",
                 is_owner: true,
                 owner_label: "Morgan Green",
+                current_user_label: "River Member",
                 current_membership_role: "member",
                 appointed_admins: [],
                 may_manage_appointed_admins: true,
@@ -268,9 +269,7 @@ describe("CommunityPage", () => {
     });
     render(<CommunityPage />);
 
-    expect(
-      await screen.findByText("Morgan Green — you"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Morgan Green — you")).toBeInTheDocument();
     const appoint = screen.getByRole("button", {
       name: "Appoint administrator member-a",
     });

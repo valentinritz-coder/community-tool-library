@@ -20,6 +20,7 @@ returns table(
   is_owner boolean,
   owner_label text,
   current_membership_role public.membership_role,
+  current_user_label text,
   appointed_admins jsonb,
   may_manage_appointed_admins boolean,
   may_approve_memberships boolean,
@@ -121,6 +122,7 @@ language sql stable security definer set search_path = '' as $$
     coalesce(nullif(btrim(owner_membership.display_name),''),
       'Community member • '||upper(right(replace(mc.community_owner_id::text,'-',''),4))),
     mc.viewer_membership_role,
+    mc.viewer_label,
     coalesce((select jsonb_agg(jsonb_build_object('id', a.user_id, 'label',
       coalesce(nullif(btrim(a.display_name),''),'Community member • '||upper(right(replace(a.user_id::text,'-',''),4))))
       order by coalesce(a.display_name,a.user_id::text), a.user_id)
@@ -250,3 +252,28 @@ begin
 end $$;
 revoke all on function public.launch_current_election(uuid,uuid) from public;
 grant execute on function public.launch_current_election(uuid,uuid) to authenticated;
+
+-- A community-facing identity belongs to the membership, not to the authentication account. This
+-- narrow boundary lets an active member update only their own label without exposing auth data or
+-- making a label an eligibility requirement.
+create function public.set_community_display_name(target_community_id uuid, requested_display_name text)
+returns text language plpgsql security definer set search_path='' as $$
+declare normalized_display_name text;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required' using errcode='42501';
+  end if;
+  normalized_display_name:=btrim(requested_display_name);
+  if normalized_display_name is null or char_length(normalized_display_name) not between 2 and 80 then
+    raise exception 'Display name must contain between 2 and 80 characters' using errcode='22023';
+  end if;
+  update public.memberships
+    set display_name=normalized_display_name
+    where community_id=target_community_id and user_id=auth.uid() and status='active';
+  if not found then
+    raise exception 'Active community membership required' using errcode='42501';
+  end if;
+  return normalized_display_name;
+end $$;
+revoke all on function public.set_community_display_name(uuid,text) from public;
+grant execute on function public.set_community_display_name(uuid,text) to authenticated;

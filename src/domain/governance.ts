@@ -31,6 +31,7 @@ export interface GovernanceSnapshot {
   is_owner: boolean;
   owner_label: string;
   current_membership_role: MembershipRole;
+  current_user_label: string;
   appointed_admins: GovernancePerson[];
   may_manage_appointed_admins: boolean;
   may_approve_memberships: boolean;
@@ -146,6 +147,8 @@ export function parseGovernanceSnapshot(value: unknown): GovernanceSnapshot {
     !governanceStates.includes(governanceState as CommunityGovernanceState) ||
     typeof row.is_owner !== "boolean" ||
     typeof row.owner_label !== "string" ||
+    typeof row.current_user_label !== "string" ||
+    row.current_user_label.trim().length === 0 ||
     !["member", "admin"].includes(String(row.current_membership_role)) ||
     !(councilTarget === null || councilTarget === 3 || councilTarget === 5) ||
     typeof row.may_commit_founding_transfer !== "boolean" ||
@@ -216,6 +219,7 @@ export function parseGovernanceSnapshot(value: unknown): GovernanceSnapshot {
     is_owner: row.is_owner,
     owner_label: row.owner_label,
     current_membership_role: row.current_membership_role as MembershipRole,
+    current_user_label: row.current_user_label,
     appointed_admins: parsePeople(row.appointed_admins, "appointed_admins"),
     may_manage_appointed_admins: row.may_manage_appointed_admins,
     may_approve_memberships: row.may_approve_memberships,

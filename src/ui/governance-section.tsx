@@ -249,6 +249,46 @@ function CommunityGovernance({
       aria-labelledby={`governance-${community.id}`}
     >
       <h3 id={`governance-${community.id}`}>{community.name}</h3>
+      <form
+        key={snapshot.current_user_label}
+        className="governance-identity"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+          void runAction(
+            `identity-${community.id}`,
+            "set_community_display_name",
+            {
+              target_community_id: community.id,
+              requested_display_name: String(form.get("display_name") ?? ""),
+            },
+            "Your community display name was updated.",
+          );
+        }}
+      >
+        <label htmlFor={`display-name-${community.id}`}>
+          Your community identity
+        </label>
+        <input
+          id={`display-name-${community.id}`}
+          name="display_name"
+          defaultValue={snapshot.current_user_label}
+          minLength={2}
+          maxLength={80}
+          required
+        />
+        <button
+          type="submit"
+          className="secondary"
+          disabled={pendingActions.includes(`identity-${community.id}`)}
+        >
+          Save display name
+        </button>
+        <p className="field-help">
+          This name is visible to members of this community and is separate from
+          your sign-in details.
+        </p>
+      </form>
       {snapshot.governance_state === "managed" && (
         <>
           <h4>Managed administration</h4>

@@ -31,6 +31,7 @@ const base: GovernanceSnapshot = {
   governance_state: "managed",
   is_owner: false,
   current_membership_role: "member",
+  current_user_label: "River Member",
   owner_label: "Morgan Green",
   appointed_admins: [],
   may_manage_appointed_admins: false,
@@ -86,6 +87,25 @@ function setup(snapshot: GovernanceSnapshot, currentUserId = "member-a") {
 }
 
 describe("GovernanceSection", () => {
+  it("updates the member's community-facing identity through the server boundary", () => {
+    const runAction = setup(base);
+    const input = screen.getByRole("textbox", {
+      name: "Your community identity",
+    });
+    expect(input).toHaveValue("River Member");
+    fireEvent.change(input, { target: { value: "River Neighbour" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save display name" }));
+    expect(runAction).toHaveBeenCalledWith(
+      "identity-community-a",
+      "set_community_display_name",
+      {
+        target_community_id: community.id,
+        requested_display_name: "River Neighbour",
+      },
+      "Your community display name was updated.",
+    );
+  });
+
   it("lets a managed owner enter reversible preparation", () => {
     const runAction = setup({ ...base, is_owner: true }, "owner-a");
     expect(

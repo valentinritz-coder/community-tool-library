@@ -8,6 +8,7 @@ const validSnapshot = {
   is_owner: true,
   owner_label: "Morgan Green",
   current_membership_role: "member",
+  current_user_label: "Morgan Green",
   appointed_admins: [{ id: "admin-a", label: "Taylor Admin" }],
   may_manage_appointed_admins: true,
   may_approve_memberships: true,
@@ -62,6 +63,7 @@ describe("parseGovernanceSnapshot", () => {
     ["current_user_has_mandate", null],
     ["may_resign", "false"],
     ["appointed_admins", [{ id: "admin-a", label: "" }]],
+    ["current_user_label", ""],
     ["latest_ballot_count", -1],
   ])("rejects an invalid %s field", (field, invalidValue) => {
     expect(() =>
