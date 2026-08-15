@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import {
   canCommitFoundingTransfer,
-  candidateLabel,
   type CouncilTarget,
   type GovernanceSnapshot,
 } from "../domain/governance";
@@ -54,14 +53,14 @@ function ElectionPanel({
           <p>
             <strong>Candidates</strong>
             <br />
-            {snapshot.candidate_ids.length} /{" "}
+            {snapshot.candidates.length} /{" "}
             {snapshot.governance_state === "democratic_preparation"
               ? "3 minimum required"
               : `${snapshot.seats_available ?? snapshot.council_target ?? 0} seats being filled`}
           </p>
           <ul className="plain-list" aria-label="Current candidates">
-            {snapshot.candidate_ids.map((candidateId, index) => (
-              <li key={candidateId}>{candidateLabel(index)}</li>
+            {snapshot.candidates.map((candidate) => (
+              <li key={candidate.id}>{candidate.label}</li>
             ))}
           </ul>
           {snapshot.current_user_is_candidate ? (
@@ -134,25 +133,25 @@ function ElectionPanel({
               Choose up to {limit} candidates. Selections are unranked and are
               not shown after submission.
             </p>
-            {snapshot.candidate_ids.map((candidateId, index) => {
-              const checked = selected.includes(candidateId);
+            {snapshot.candidates.map((candidate) => {
+              const checked = selected.includes(candidate.id);
               const atLimit = selected.length >= limit;
               return (
-                <label key={candidateId}>
+                <label key={candidate.id}>
                   <input
                     type="checkbox"
                     checked={checked}
                     disabled={!checked && atLimit}
-                    aria-label={`Approve ${candidateLabel(index)}`}
+                    aria-label={`Approve ${candidate.label}`}
                     onChange={() =>
                       setSelected((current) =>
                         checked
-                          ? current.filter((id) => id !== candidateId)
-                          : [...current, candidateId],
+                          ? current.filter((id) => id !== candidate.id)
+                          : [...current, candidate.id],
                       )
                     }
                   />
-                  {candidateLabel(index)}
+                  {candidate.label}
                 </label>
               );
             })}
@@ -211,12 +210,6 @@ function CommunityGovernance({
       membership.user_id === currentUserId &&
       membership.status === "active",
   );
-  const admins = memberships.filter(
-    (membership) =>
-      membership.community_id === community.id &&
-      membership.role === "admin" &&
-      membership.status === "active",
-  );
   const pendingCommit = pendingActions.includes(`commit-${community.id}`);
   const pendingResign = pendingActions.includes(`resign-${community.id}`);
 
@@ -237,14 +230,26 @@ function CommunityGovernance({
             <div>
               <dt>Owner</dt>
               <dd>
-                {snapshot.is_owner
-                  ? "You — community owner"
-                  : "Community owner"}
+                {snapshot.owner_label}
+                {snapshot.is_owner ? " — you" : ""}
               </dd>
             </div>
             <div>
               <dt>Appointed administrators</dt>
-              <dd>{admins.length}</dd>
+              <dd>
+                {snapshot.appointed_admins.length === 0 ? (
+                  "None"
+                ) : (
+                  <ul className="plain-list">
+                    {snapshot.appointed_admins.map((admin) => (
+                      <li key={admin.id}>
+                        {admin.label}
+                        {admin.id === currentUserId ? " — you" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </dd>
             </div>
             <div>
               <dt>Your role</dt>
@@ -364,10 +369,13 @@ function CommunityGovernance({
               >
                 Launch election and commit democratic transfer
               </button>
-              {snapshot.candidate_ids.length < 3 && (
+              {!snapshot.may_commit_founding_transfer && (
                 <p role="status">
-                  At least 3 candidates are required before the election can
-                  launch.
+                  {snapshot.commit_blocker === "candidate_minimum"
+                    ? "At least 3 candidates are required before the election can launch."
+                    : snapshot.commit_blocker === "electorate_minimum"
+                      ? "At least 5 active members are required before the election can launch."
+                      : "The authoritative election preconditions are not yet satisfied."}
                 </p>
               )}
             </div>
@@ -382,6 +390,16 @@ function CommunityGovernance({
             administrators now serve only as temporary caretakers. The owner
             cannot restore managed administration alone.
           </p>
+          {snapshot.appointed_admins.length > 0 && (
+            <div>
+              <strong>Temporary caretakers</strong>
+              <ul className="plain-list">
+                {snapshot.appointed_admins.map((caretaker) => (
+                  <li key={caretaker.id}>{caretaker.label}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ElectionPanel
             snapshot={snapshot}
             pendingActions={pendingActions}
@@ -428,14 +446,46 @@ function CommunityGovernance({
                   : "Temporary democratic caretakers"}
               </strong>
               <ul className="plain-list">
-                {snapshot.elected_member_ids.map((memberId, index) => (
-                  <li key={memberId}>
-                    Council member {index + 1}
-                    {memberId === currentUserId ? " — you" : ""}
+                {snapshot.elected_members.map((member) => (
+                  <li key={member.id}>
+                    {member.label}
+                    {member.id === currentUserId ? " — you" : ""}
                   </li>
                 ))}
               </ul>
             </div>
+          )}
+          <dl className="governance-facts">
+            <div>
+              <dt>Took office</dt>
+              <dd>
+                {new Date(
+                  snapshot.council_took_office_at ?? "",
+                ).toLocaleDateString()}
+              </dd>
+            </div>
+            <div>
+              <dt>Nominal term ends</dt>
+              <dd>
+                {new Date(
+                  snapshot.council_term_ends_at ?? "",
+                ).toLocaleDateString()}
+              </dd>
+            </div>
+          </dl>
+          {snapshot.latest_election_status && (
+            <p className="status-panel">
+              <strong>
+                Latest election:{" "}
+                {snapshot.latest_round_status?.replaceAll("_", " ") ??
+                  snapshot.latest_election_status}
+                .
+              </strong>{" "}
+              {snapshot.latest_ballot_count !== null &&
+              snapshot.latest_electorate_count !== null
+                ? `${snapshot.latest_ballot_count} of ${snapshot.latest_electorate_count} eligible members submitted a ballot. Quorum required ${snapshot.latest_quorum_threshold}.`
+                : "Participation information is not available."}
+            </p>
           )}
           {snapshot.operational_status === "operational" && (
             <p className="status-panel">

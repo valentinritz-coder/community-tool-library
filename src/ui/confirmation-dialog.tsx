@@ -19,12 +19,12 @@ export function ConfirmationDialog({
   onConfirm,
   onCancel,
 }: ConfirmationDialogProps) {
-  const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    confirmRef.current?.focus();
+    cancelRef.current?.focus();
     return () => previouslyFocused?.focus();
   }, []);
 
@@ -62,10 +62,15 @@ export function ConfirmationDialog({
         <h2 id="confirmation-title">{title}</h2>
         <p id="confirmation-description">{description}</p>
         <div className="actions">
-          <button ref={confirmRef} disabled={pending} onClick={onConfirm}>
+          <button disabled={pending} onClick={onConfirm}>
             {confirmLabel}
           </button>
-          <button className="secondary" disabled={pending} onClick={onCancel}>
+          <button
+            ref={cancelRef}
+            className="secondary"
+            disabled={pending}
+            onClick={onCancel}
+          >
             Keep current governance
           </button>
         </div>
