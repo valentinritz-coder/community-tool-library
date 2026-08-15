@@ -6,6 +6,7 @@ interface ConfirmationDialogProps {
   title: string;
   description: string;
   confirmLabel: string;
+  cancelLabel: string;
   pending?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -15,6 +16,7 @@ export function ConfirmationDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel,
   pending = false,
   onConfirm,
   onCancel,
@@ -28,6 +30,10 @@ export function ConfirmationDialog({
     return () => previouslyFocused?.focus();
   }, []);
 
+  useEffect(() => {
+    if (pending) dialogRef.current?.focus();
+  }, [pending]);
+
   return (
     <div
       className="dialog-backdrop"
@@ -38,7 +44,11 @@ export function ConfirmationDialog({
           const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
             "button:not(:disabled)",
           );
-          if (!controls?.length) return;
+          if (!controls?.length) {
+            event.preventDefault();
+            dialogRef.current?.focus();
+            return;
+          }
           const first = controls[0];
           const last = controls[controls.length - 1];
           if (event.shiftKey && document.activeElement === first) {
@@ -53,6 +63,7 @@ export function ConfirmationDialog({
     >
       <div
         ref={dialogRef}
+        tabIndex={-1}
         className="confirmation-dialog"
         role="alertdialog"
         aria-modal="true"
@@ -71,7 +82,7 @@ export function ConfirmationDialog({
             disabled={pending}
             onClick={onCancel}
           >
-            Keep current governance
+            {cancelLabel}
           </button>
         </div>
       </div>

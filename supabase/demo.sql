@@ -26,11 +26,11 @@ from auth.users where id::text like 'd0000000-0000-4000-8000-00000000000%';
 
 insert into public.communities (id, name, join_code, owner_id, governance_state, created_at) values
  ('d1000000-0000-4000-8000-000000000001','Example Test Tool Circle','d1000000-0000-4000-8000-000000000099','d0000000-0000-4000-8000-000000000001','managed',now());
-insert into public.memberships (community_id,user_id,role,status,created_at) values
- ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001','admin','active',now()),
- ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','member','active',now()),
- ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000003','member','active',now()),
- ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000004','member','active',now());
+insert into public.memberships (community_id,user_id,role,status,display_name,created_at) values
+ ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000001','admin','active','Morgan Green',now()),
+ ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','member','active','Alex River',now()),
+ ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000003','member','active','Blair Stone',now()),
+ ('d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000004','member','active','Casey Wood',now());
 
 insert into public.items (id,community_id,owner_id,name,category,description,photo_path,is_free,price_per_day_cents,photo_uploaded,created_at) values
  ('d2000000-0000-4000-8000-000000000001','d1000000-0000-4000-8000-000000000001','d0000000-0000-4000-8000-000000000002','Compact drill','small_diy','Synthetic low-risk drill listing.','d2000000-0000-4000-8000-000000000001/photo.jpg',true,null,true,now()-interval '4 days'),

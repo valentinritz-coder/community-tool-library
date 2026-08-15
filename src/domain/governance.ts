@@ -18,6 +18,7 @@ export type ElectionRoundStatus =
   | "failed_quorum"
   | "insufficient_winners";
 export type CommitBlocker = "candidate_minimum" | "electorate_minimum";
+export type LaunchBlocker = "candidate_minimum";
 
 export interface GovernancePerson {
   id: string;
@@ -31,11 +32,18 @@ export interface GovernanceSnapshot {
   owner_label: string;
   current_membership_role: MembershipRole;
   appointed_admins: GovernancePerson[];
+  may_manage_appointed_admins: boolean;
+  may_approve_memberships: boolean;
+  may_moderate_community: boolean;
   council_target: CouncilTarget | null;
   may_commit_founding_transfer: boolean;
   commit_blocker: CommitBlocker | null;
   cycle_id: string | null;
   cycle_status: ElectionCycleStatus | null;
+  cycle_seats_to_fill: number | null;
+  valid_candidate_count: number;
+  may_launch_current_election: boolean;
+  launch_blocker: LaunchBlocker | null;
   candidates: GovernancePerson[];
   current_user_is_candidate: boolean;
   round_id: string | null;
@@ -141,12 +149,22 @@ export function parseGovernanceSnapshot(value: unknown): GovernanceSnapshot {
     !["member", "admin"].includes(String(row.current_membership_role)) ||
     !(councilTarget === null || councilTarget === 3 || councilTarget === 5) ||
     typeof row.may_commit_founding_transfer !== "boolean" ||
+    typeof row.may_manage_appointed_admins !== "boolean" ||
+    typeof row.may_approve_memberships !== "boolean" ||
+    typeof row.may_moderate_community !== "boolean" ||
     !(
       commitBlocker === null ||
       (typeof commitBlocker === "string" &&
         commitBlockers.includes(commitBlocker as CommitBlocker))
     ) ||
     !isNullableString(row.cycle_id) ||
+    !isNullableNonNegativeInteger(row.cycle_seats_to_fill) ||
+    !isNullableNonNegativeInteger(row.valid_candidate_count) ||
+    row.valid_candidate_count === null ||
+    typeof row.may_launch_current_election !== "boolean" ||
+    !(
+      row.launch_blocker === null || row.launch_blocker === "candidate_minimum"
+    ) ||
     !(
       cycleStatus === null ||
       (typeof cycleStatus === "string" &&
@@ -199,11 +217,18 @@ export function parseGovernanceSnapshot(value: unknown): GovernanceSnapshot {
     owner_label: row.owner_label,
     current_membership_role: row.current_membership_role as MembershipRole,
     appointed_admins: parsePeople(row.appointed_admins, "appointed_admins"),
+    may_manage_appointed_admins: row.may_manage_appointed_admins,
+    may_approve_memberships: row.may_approve_memberships,
+    may_moderate_community: row.may_moderate_community,
     council_target: councilTarget,
     may_commit_founding_transfer: row.may_commit_founding_transfer,
     commit_blocker: commitBlocker as CommitBlocker | null,
     cycle_id: row.cycle_id,
     cycle_status: cycleStatus as ElectionCycleStatus | null,
+    cycle_seats_to_fill: row.cycle_seats_to_fill,
+    valid_candidate_count: row.valid_candidate_count,
+    may_launch_current_election: row.may_launch_current_election,
+    launch_blocker: row.launch_blocker as LaunchBlocker | null,
     candidates: parsePeople(row.candidates, "candidates"),
     current_user_is_candidate: row.current_user_is_candidate,
     round_id: row.round_id,

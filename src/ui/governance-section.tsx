@@ -53,10 +53,10 @@ function ElectionPanel({
           <p>
             <strong>Candidates</strong>
             <br />
-            {snapshot.candidates.length} /{" "}
+            {snapshot.valid_candidate_count} /{" "}
             {snapshot.governance_state === "democratic_preparation"
               ? "3 minimum required"
-              : `${snapshot.seats_available ?? snapshot.council_target ?? 0} seats being filled`}
+              : `${snapshot.cycle_seats_to_fill ?? 0} seats being filled`}
           </p>
           <ul className="plain-list" aria-label="Current candidates">
             {snapshot.candidates.map((candidate) => (
@@ -98,6 +98,36 @@ function ElectionPanel({
             >
               Stand as candidate
             </button>
+          )}
+          {snapshot.governance_state !== "democratic_preparation" && (
+            <>
+              <button
+                type="button"
+                disabled={
+                  !snapshot.may_launch_current_election ||
+                  pendingActions.includes(`launch-${snapshot.community_id}`)
+                }
+                onClick={() =>
+                  void runAction(
+                    `launch-${snapshot.community_id}`,
+                    "launch_current_election",
+                    {
+                      target_community_id: snapshot.community_id,
+                      target_cycle_id: snapshot.cycle_id ?? "",
+                    },
+                    "Voting is now open.",
+                  )
+                }
+              >
+                Start voting
+              </button>
+              {!snapshot.may_launch_current_election &&
+                snapshot.launch_blocker === "candidate_minimum" && (
+                  <p role="status">
+                    More active candidates are required before voting can start.
+                  </p>
+                )}
+            </>
           )}
         </>
       )}
@@ -552,6 +582,7 @@ function CommunityGovernance({
           title="Commit the democratic transfer?"
           description="Once launched, the community cannot be returned to managed administration by the owner alone, even if the election fails. The owner cannot cancel the transition or simply take control back, and appointed administrators become temporary caretakers."
           confirmLabel="Launch election and commit transfer"
+          cancelLabel="Keep current governance"
           pending={pendingCommit}
           onCancel={() => setConfirmation(null)}
           onConfirm={() =>
@@ -569,6 +600,7 @@ function CommunityGovernance({
           title="Resign from the council?"
           description="Your resignation is immediate once confirmed and your seat becomes vacant. If fewer than three active councillors remain, democratic reconstitution is required. The owner does not regain control."
           confirmLabel="Confirm council resignation"
+          cancelLabel="Keep my council seat"
           pending={pendingResign}
           onCancel={() => setConfirmation(null)}
           onConfirm={() =>

@@ -50,14 +50,21 @@ describe("CommunityPage", () => {
                 community_id: "community-a",
                 governance_state: "managed",
                 is_owner: true,
-                owner_label: "owner@example.test",
+                owner_label: "Morgan Green",
                 current_membership_role: "member",
                 appointed_admins: [],
+                may_manage_appointed_admins: true,
+                may_approve_memberships: true,
+                may_moderate_community: true,
                 council_target: null,
                 may_commit_founding_transfer: false,
                 commit_blocker: null,
                 cycle_id: null,
                 cycle_status: null,
+                cycle_seats_to_fill: null,
+                valid_candidate_count: 0,
+                may_launch_current_election: false,
+                launch_blocker: null,
                 candidates: [],
                 current_user_is_candidate: false,
                 round_id: null,
@@ -262,7 +269,7 @@ describe("CommunityPage", () => {
     render(<CommunityPage />);
 
     expect(
-      await screen.findByText("owner@example.test — you"),
+      await screen.findByText("Morgan Green — you"),
     ).toBeInTheDocument();
     const appoint = screen.getByRole("button", {
       name: "Appoint administrator member-a",

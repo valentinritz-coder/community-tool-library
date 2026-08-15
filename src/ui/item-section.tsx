@@ -39,7 +39,7 @@ import {
 interface ItemSectionProps {
   communities: Pick<Community, "id" | "name" | "join_code">[];
   currentUserId: string;
-  adminCommunityIds?: string[];
+  moderationCommunityIds?: string[];
 }
 
 const noAdminCommunities: string[] = [];
@@ -55,7 +55,7 @@ function messageFor(error: unknown): string {
 export function ItemSection({
   communities,
   currentUserId,
-  adminCommunityIds = noAdminCommunities,
+  moderationCommunityIds = noAdminCommunities,
 }: ItemSectionProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -183,14 +183,14 @@ export function ItemSection({
     setConditionPhotoUrls(conditionUrls);
     setPhotoUrls(urls);
     setLoading(false);
-    if (communityId && adminCommunityIds.includes(communityId)) {
+    if (communityId && moderationCommunityIds.includes(communityId)) {
       const reports = await supabase.rpc("list_moderation_reports", {
         target_community_id: communityId,
       });
       if (reports.error) throw reports.error;
       setModerationReports(reports.data as ModerationReport[]);
     } else setModerationReports([]);
-  }, [adminCommunityIds, communities, inventoryCommunityId]);
+  }, [moderationCommunityIds, communities, inventoryCommunityId]);
 
   useEffect(() => {
     const loadItems = window.setTimeout(() => {
@@ -1126,7 +1126,7 @@ export function ItemSection({
           </ul>
         )}
       </section>
-      {adminCommunityIds.includes(selectedCommunityId) && (
+      {moderationCommunityIds.includes(selectedCommunityId) && (
         <section
           className="booking-requests"
           aria-labelledby="moderation-title"

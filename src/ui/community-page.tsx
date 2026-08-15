@@ -3,13 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  canApproveMembership,
-  canManageAppointedAdministrator,
-  hasManagedAdministrationAuthority,
-  type Community,
-  type Membership,
-} from "../domain/community";
+import { type Community, type Membership } from "../domain/community";
 import {
   parseGovernanceSnapshot,
   type GovernanceSnapshot,
@@ -437,11 +431,11 @@ export function CommunityPage() {
                         {membership.role} — {membership.status}
                       </span>
                       {state.communities.map((community) =>
-                        canManageAppointedAdministrator(
-                          community,
-                          currentUserId,
-                          membership,
-                        ) ? (
+                        membership.community_id === community.id &&
+                        membership.status === "active" &&
+                        state.governance.find(
+                          (snapshot) => snapshot.community_id === community.id,
+                        )?.may_manage_appointed_admins ? (
                           <button
                             key={community.id}
                             type="button"
@@ -469,32 +463,32 @@ export function CommunityPage() {
                           </button>
                         ) : null,
                       )}
-                      {canApproveMembership(
-                        membership,
-                        currentUserId,
-                        state.memberships,
-                        state.communities,
-                      ) && (
-                        <button
-                          type="button"
-                          disabled={isPending(
-                            `approve-${membership.community_id}-${membership.user_id}`,
-                          )}
-                          onClick={() =>
-                            void runRpc(
+                      {membership.status === "pending" &&
+                        membership.user_id !== currentUserId &&
+                        state.governance.find(
+                          (snapshot) =>
+                            snapshot.community_id === membership.community_id,
+                        )?.may_approve_memberships && (
+                          <button
+                            type="button"
+                            disabled={isPending(
                               `approve-${membership.community_id}-${membership.user_id}`,
-                              "approve_membership",
-                              {
-                                target_community_id: membership.community_id,
-                                target_user_id: membership.user_id,
-                              },
-                              "Membership approved.",
-                            )
-                          }
-                        >
-                          Approve membership
-                        </button>
-                      )}
+                            )}
+                            onClick={() =>
+                              void runRpc(
+                                `approve-${membership.community_id}-${membership.user_id}`,
+                                "approve_membership",
+                                {
+                                  target_community_id: membership.community_id,
+                                  target_user_id: membership.user_id,
+                                },
+                                "Membership approved.",
+                              )
+                            }
+                          >
+                            Approve membership
+                          </button>
+                        )}
                     </li>
                   ))}
                 </ul>
@@ -511,15 +505,9 @@ export function CommunityPage() {
             <ItemSection
               communities={state.communities}
               currentUserId={currentUserId}
-              adminCommunityIds={state.communities
-                .filter((community) =>
-                  hasManagedAdministrationAuthority(
-                    community,
-                    currentUserId,
-                    state.memberships,
-                  ),
-                )
-                .map((community) => community.id)}
+              moderationCommunityIds={state.governance
+                .filter((snapshot) => snapshot.may_moderate_community)
+                .map((snapshot) => snapshot.community_id)}
             />
             <button
               type="button"

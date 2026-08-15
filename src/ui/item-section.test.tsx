@@ -166,7 +166,7 @@ describe("ItemSection", () => {
       <ItemSection
         communities={[community]}
         currentUserId="admin-a"
-        adminCommunityIds={["community-a"]}
+        moderationCommunityIds={["community-a"]}
       />,
     );
     expect(await screen.findByText("Status: Open")).toBeInTheDocument();
@@ -208,7 +208,7 @@ describe("ItemSection", () => {
       <ItemSection
         communities={[community]}
         currentUserId="admin-a"
-        adminCommunityIds={["community-a"]}
+        moderationCommunityIds={["community-a"]}
       />,
     );
     fireEvent.click(await screen.findByRole("button", { name: "Hide item" }));

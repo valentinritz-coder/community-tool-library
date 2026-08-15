@@ -31,11 +31,18 @@ const base: GovernanceSnapshot = {
   governance_state: "managed",
   is_owner: false,
   current_membership_role: "member",
-  owner_label: "owner@example.test",
+  owner_label: "Morgan Green",
   appointed_admins: [],
+  may_manage_appointed_admins: false,
+  may_approve_memberships: false,
+  may_moderate_community: false,
   council_target: null,
   cycle_id: null,
   cycle_status: null,
+  cycle_seats_to_fill: null,
+  valid_candidate_count: 0,
+  may_launch_current_election: false,
+  launch_blocker: null,
   may_commit_founding_transfer: false,
   commit_blocker: null,
   candidates: [],
@@ -108,12 +115,12 @@ describe("GovernanceSection", () => {
       {
         ...base,
         is_owner: true,
-        appointed_admins: [{ id: "member-a", label: "admin@example.test" }],
+        appointed_admins: [{ id: "member-a", label: "Taylor Admin" }],
       },
       "owner-a",
     );
-    expect(screen.getByText("owner@example.test — you")).toBeInTheDocument();
-    expect(screen.getByText("admin@example.test")).toBeInTheDocument();
+    expect(screen.getByText("Morgan Green — you")).toBeInTheDocument();
+    expect(screen.getByText("Taylor Admin")).toBeInTheDocument();
   });
 
   it.each([0, 1, 2])(
@@ -129,7 +136,7 @@ describe("GovernanceSection", () => {
           cycle_status: "candidacy",
           candidates: Array.from({ length: count }, (_, index) => ({
             id: `candidate-${index}`,
-            label: `candidate-${index}@example.test`,
+            label: `Candidate ${index + 1}`,
           })),
           commit_blocker: "candidate_minimum",
         },
@@ -155,9 +162,9 @@ describe("GovernanceSection", () => {
         cycle_id: "cycle-a",
         cycle_status: "candidacy",
         candidates: [
-          { id: "a", label: "alex@example.test" },
-          { id: "b", label: "blair@example.test" },
-          { id: "c", label: "casey@example.test" },
+          { id: "a", label: "Alex River" },
+          { id: "b", label: "Blair Stone" },
+          { id: "c", label: "Casey Wood" },
         ],
         may_commit_founding_transfer: true,
       },
@@ -183,9 +190,9 @@ describe("GovernanceSection", () => {
         cycle_id: "cycle-a",
         cycle_status: "candidacy",
         candidates: [
-          { id: "a", label: "alex@example.test" },
-          { id: "b", label: "blair@example.test" },
-          { id: "c", label: "casey@example.test" },
+          { id: "a", label: "Alex River" },
+          { id: "b", label: "Blair Stone" },
+          { id: "c", label: "Casey Wood" },
         ],
         commit_blocker: "electorate_minimum",
       },
@@ -226,12 +233,77 @@ describe("GovernanceSection", () => {
     unmount();
     setup({
       ...candidacy,
-      candidates: [{ id: "member-a", label: "member@example.test" }],
+      candidates: [{ id: "member-a", label: "Member Oak" }],
       current_user_is_candidate: true,
     });
     expect(
       screen.getByRole("button", { name: "Withdraw candidacy" }),
     ).toBeInTheDocument();
+  });
+
+  it("launches a member-accessible retry after authoritative candidacy checks", () => {
+    const runAction = setup({
+      ...base,
+      governance_state: "democratic_transition",
+      cycle_id: "retry-cycle",
+      cycle_status: "candidacy",
+      cycle_seats_to_fill: 3,
+      valid_candidate_count: 3,
+      may_launch_current_election: true,
+      candidates: [
+        { id: "a", label: "Alex River" },
+        { id: "b", label: "Blair Stone" },
+        { id: "c", label: "Casey Wood" },
+      ],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Start voting" }));
+    expect(runAction).toHaveBeenCalledWith(
+      "launch-community-a",
+      "launch_current_election",
+      { target_community_id: "community-a", target_cycle_id: "retry-cycle" },
+      "Voting is now open.",
+    );
+  });
+
+  it("shows reconstitution seats to fill before a round exists", () => {
+    setup({
+      ...base,
+      governance_state: "democratic",
+      council_target: 5,
+      active_mandates: 3,
+      vacant_seats: 2,
+      operational_status: "operational",
+      council_took_office_at: "2026-01-01T00:00:00Z",
+      council_term_ends_at: "2027-01-01T00:00:00Z",
+      cycle_id: "reconstitution-cycle",
+      cycle_status: "candidacy",
+      cycle_seats_to_fill: 2,
+      valid_candidate_count: 1,
+      may_launch_current_election: true,
+      candidates: [{ id: "a", label: "Alex River" }],
+    });
+    expect(screen.getByText(/1 \/ 2 seats being filled/)).toBeInTheDocument();
+  });
+
+  it("uses the authoritative valid candidate count", () => {
+    setup(
+      {
+        ...base,
+        governance_state: "democratic_preparation",
+        is_owner: true,
+        council_target: 3,
+        cycle_id: "cycle-a",
+        cycle_status: "candidacy",
+        valid_candidate_count: 2,
+        commit_blocker: "candidate_minimum",
+        candidates: [
+          { id: "a", label: "Alex River" },
+          { id: "b", label: "Blair Stone" },
+        ],
+      },
+      "owner-a",
+    );
+    expect(screen.getByText(/2 \/ 3 minimum required/)).toBeInTheDocument();
   });
 
   it("uses labelled approval checkboxes and prevents over-selection", () => {
@@ -242,9 +314,9 @@ describe("GovernanceSection", () => {
       cycle_id: "cycle-a",
       cycle_status: "voting",
       candidates: [
-        { id: "a", label: "alex@example.test" },
-        { id: "b", label: "blair@example.test" },
-        { id: "c", label: "casey@example.test" },
+        { id: "a", label: "Alex River" },
+        { id: "b", label: "Blair Stone" },
+        { id: "c", label: "Casey Wood" },
       ],
       may_commit_founding_transfer: true,
       round_id: "round-a",
@@ -253,9 +325,9 @@ describe("GovernanceSection", () => {
       seats_available: 2,
       current_user_may_vote: true,
     });
-    const first = screen.getByLabelText("Approve alex@example.test");
-    const second = screen.getByLabelText("Approve blair@example.test");
-    const third = screen.getByLabelText("Approve casey@example.test");
+    const first = screen.getByLabelText("Approve Alex River");
+    const second = screen.getByLabelText("Approve Blair Stone");
+    const third = screen.getByLabelText("Approve Casey Wood");
     fireEvent.click(first);
     fireEvent.click(second);
     expect(third).toBeDisabled();
@@ -271,8 +343,8 @@ describe("GovernanceSection", () => {
       cycle_id: "cycle-a",
       cycle_status: "voting",
       candidates: [
-        { id: "a", label: "alex@example.test" },
-        { id: "b", label: "blair@example.test" },
+        { id: "a", label: "Alex River" },
+        { id: "b", label: "Blair Stone" },
       ],
       round_id: "round-a",
       round_number: 1,
@@ -295,9 +367,9 @@ describe("GovernanceSection", () => {
       cycle_id: "cycle-a",
       cycle_status: "voting",
       candidates: [
-        { id: "a", label: "alex@example.test" },
-        { id: "b", label: "blair@example.test" },
-        { id: "c", label: "casey@example.test" },
+        { id: "a", label: "Alex River" },
+        { id: "b", label: "Blair Stone" },
+        { id: "c", label: "Casey Wood" },
       ],
       round_id: "round-a",
       round_number: 1,
@@ -327,9 +399,9 @@ describe("GovernanceSection", () => {
       council_target: 5,
       active_mandates: 3,
       elected_members: [
-        { id: "member-a", label: "alex@example.test" },
-        { id: "member-b", label: "blair@example.test" },
-        { id: "member-c", label: "casey@example.test" },
+        { id: "member-a", label: "Alex River" },
+        { id: "member-b", label: "Blair Stone" },
+        { id: "member-c", label: "Casey Wood" },
       ],
       council_took_office_at: "2026-01-01T00:00:00Z",
       council_term_ends_at: "2027-01-01T00:00:00Z",
@@ -345,7 +417,7 @@ describe("GovernanceSection", () => {
       screen.getByRole("heading", { name: "Elected community council" }),
     ).toBeInTheDocument();
     expect(screen.getByText("2", { selector: "dd" })).toBeInTheDocument();
-    expect(screen.getByText("alex@example.test — you")).toBeInTheDocument();
+    expect(screen.getByText("Alex River — you")).toBeInTheDocument();
     expect(screen.getByText(/4 of 5 eligible members/)).toBeInTheDocument();
   });
 
@@ -368,6 +440,9 @@ describe("GovernanceSection", () => {
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
       "your seat becomes vacant",
     );
+    expect(
+      screen.getByRole("button", { name: "Keep my council seat" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/resign member/i)).not.toBeInTheDocument();
   });
 
@@ -452,8 +527,8 @@ describe("GovernanceSection", () => {
       cycle_id: "cycle-a",
       cycle_status: "voting",
       candidates: [
-        { id: "a", label: "alex@example.test" },
-        { id: "b", label: "blair@example.test" },
+        { id: "a", label: "Alex River" },
+        { id: "b", label: "Blair Stone" },
       ],
       round_id: "round-b",
       round_number: 2,

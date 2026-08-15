@@ -110,7 +110,7 @@ try {
     [users],
   );
 
-  console.log("[1/8] duplicate resignation");
+  console.log("[1/9] duplicate resignation");
   // Same mandate: the community lock serializes both calls and only one resignation is audited.
   const same = await fixture(observer, 1);
   await Promise.all([asUser(first, users[0]), asUser(second, users[0])]);
@@ -132,7 +132,7 @@ try {
     1,
   );
 
-  console.log("[2/8] concurrent councillor resignations");
+  console.log("[2/9] concurrent councillor resignations");
   // Different councillors can resign concurrently without reviving managed governance.
   const multiple = await fixture(observer, 2);
   await Promise.all([asUser(first, users[0]), asUser(second, users[1])]);
@@ -154,7 +154,7 @@ try {
   ).rows[0];
   assert.deepEqual(state, { state: "democratic", active: 1 });
 
-  console.log("[3/8] resignations to zero");
+  console.log("[3/9] resignations to zero");
   // Three committed resignations may safely leave a democratic council completely vacant.
   const vacant = await fixture(observer, 7);
   await Promise.all([
@@ -190,7 +190,7 @@ try {
     { state: "democratic", active: 0 },
   );
 
-  console.log("[4/8] duplicate reconstitution open");
+  console.log("[4/9] duplicate reconstitution open");
   const opening = await fixture(observer, 3, 2, 3);
   await Promise.all([asUser(first, users[3]), asUser(second, users[4])]);
   await first.query("select public.open_council_reconstitution_cycle($1)", [
@@ -222,7 +222,7 @@ try {
     { n: 1, target: 1 },
   );
 
-  console.log("[5/8] resignation vs reconstitution open");
+  console.log("[5/9] resignation vs reconstitution open");
   const resignOpen = await fixture(observer, 4);
   await Promise.all([asUser(first, users[0]), asUser(second, users[3])]);
   await first.query("select public.resign_elected_council_mandate($1)", [
@@ -246,7 +246,7 @@ try {
     1,
   );
 
-  console.log("[6/8] cross-community install rejection");
+  console.log("[6/9] cross-community install rejection");
   const installing = await fixture(observer, 5, 1, 3);
   const cycle = await completedReconstitution(
     observer,
@@ -266,7 +266,7 @@ try {
     "55000",
   );
 
-  console.log("[7/8] duplicate install");
+  console.log("[7/9] duplicate install");
   await Promise.all([first.query("begin"), second.query("begin")]);
   await first.query("select public.install_reconstitution_winners($1,$2)", [
     installing,
@@ -292,7 +292,7 @@ try {
     3,
   );
 
-  console.log("[8/8] install vs resignation");
+  console.log("[8/9] install vs resignation");
   const changingVacancy = await fixture(observer, 6, 2, 3);
   const oneWinner = await completedReconstitution(observer, changingVacancy, [
     users[2],
@@ -329,6 +329,42 @@ try {
     ).rows[0].state,
     "democratic",
   );
+  console.log("[9/9] concurrent first-round launch");
+  await observer.query(
+    "insert into public.election_candidacies(cycle_id,community_id,candidate_id) values((select id from public.election_cycles where community_id=$1 and status='candidacy'),$1,$2)",
+    [opening, users[3]],
+  );
+  const launchCycle = (
+    await observer.query(
+      "select id from public.election_cycles where community_id=$1 and status='candidacy'",
+      [opening],
+    )
+  ).rows[0].id;
+  await Promise.all([asUser(first, users[3]), asUser(second, users[4])]);
+  await first.query("select public.launch_current_election($1,$2)", [
+    opening,
+    launchCycle,
+  ]);
+  const duplicateLaunch = rejected(
+    second.query("select public.launch_current_election($1,$2)", [
+      opening,
+      launchCycle,
+    ]),
+  );
+  await waitForLock(observer, secondPid, "launch_current_election");
+  await first.query("commit");
+  assert.equal((await duplicateLaunch)?.code, "55000");
+  await second.query("rollback");
+  assert.equal(
+    (
+      await observer.query(
+        "select count(*)::int n from public.election_rounds where cycle_id=$1",
+        [launchCycle],
+      )
+    ).rows[0].n,
+    1,
+  );
+
   console.log("Council continuity concurrency checks passed.");
 } finally {
   await Promise.allSettled([
