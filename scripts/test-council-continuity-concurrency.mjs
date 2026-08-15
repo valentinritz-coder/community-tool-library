@@ -181,7 +181,7 @@ try {
   );
 
   // Opening twice and resignation-vs-open both serialize on the community row.
-  const opening = await fixture(observer, 3);
+  const opening = await fixture(observer, 3, 2, 3);
   await Promise.all([asUser(first, users[3]), asUser(second, users[4])]);
   await first.query("select public.open_council_reconstitution_cycle($1)", [
     opening,
@@ -193,8 +193,24 @@ try {
   );
   await waitForLock(observer, secondPid, "open_council");
   await first.query("commit");
-  assert.equal((await doubleOpen)?.code, "55000");
+  const duplicateOpenError = await doubleOpen;
+  assert.equal(duplicateOpenError?.code, "55000");
+  assert.equal(
+    duplicateOpenError?.message,
+    "A community election cycle is already active",
+  );
   await second.query("rollback");
+  assert.deepEqual(
+    (
+      await observer.query(
+        `select count(*)::int n,max(target_seats)::int target
+         from public.election_cycles
+         where community_id=$1 and status in ('candidacy','voting')`,
+        [opening],
+      )
+    ).rows[0],
+    { n: 1, target: 1 },
+  );
   const resignOpen = await fixture(observer, 4);
   await Promise.all([asUser(first, users[0]), asUser(second, users[3])]);
   await first.query("select public.resign_elected_council_mandate($1)", [
