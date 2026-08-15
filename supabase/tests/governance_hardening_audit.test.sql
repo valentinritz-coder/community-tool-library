@@ -42,7 +42,7 @@ select ok(not exists(
   where n.nspname='public' and p.prosecdef
     and (p.proname like '%governance%' or p.proname like '%election%'
       or p.proname like '%council%' or p.proname in ('set_appointed_administrator','set_community_display_name'))
-    and not coalesce(p.proconfig,'{}'::text[]) @> array['search_path=']
+    and not coalesce(p.proconfig,'{}'::text[]) @> array['search_path=""']
 ), 'every governance SECURITY DEFINER function fixes an empty search_path');
 
 select ok(position('approved_candidate' in

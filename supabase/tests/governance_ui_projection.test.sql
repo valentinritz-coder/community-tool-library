@@ -1,5 +1,5 @@
 begin;
-select plan(31);
+select plan(34);
 
 insert into auth.users(id,instance_id,aud,role,email,encrypted_password)
 select ('57000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,
@@ -106,6 +106,17 @@ select ok((select owner_label not like '%@%' and appointed_admins::text not like
  'authentication emails are absent from community governance identities');
 select ok(position('email' in pg_get_functiondef('public.get_community_governance_ui(uuid)'::regprocedure))=0,
  'governance read model never reads authentication email');
+select ok((select to_jsonb(ui)::text !~* '(@|email|phone|address|approved_candidate|voter_id)'
+ from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001') ui),
+ 'owner receives a real projection without auth/contact data or voter-choice fields');
+select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000002',true);
+select ok((select to_jsonb(ui)::text !~* '(@|email|phone|address|approved_candidate|voter_id)'
+ from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001') ui),
+ 'appointed admin receives a real projection without auth/contact data or voter-choice fields');
+select set_config('request.jwt.claim.sub','57000000-0000-4000-8000-000000000003',true);
+select ok((select to_jsonb(ui)::text !~* '(@|email|phone|address|approved_candidate|voter_id)'
+ from public.get_community_governance_ui('57100000-0000-4000-8000-000000000001') ui),
+ 'ordinary member receives a real projection without auth/contact data or voter-choice fields');
 select ok(not has_function_privilege('anon','public.get_community_governance_ui(uuid)','execute'),
  'anonymous role cannot execute the read model');
 select ok(has_function_privilege('authenticated','public.get_community_governance_ui(uuid)','execute'),
