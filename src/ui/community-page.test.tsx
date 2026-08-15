@@ -42,7 +42,39 @@ describe("CommunityPage", () => {
     getSession.mockResolvedValue({ data: { session: null } });
     signInWithPassword.mockResolvedValue({ error: null });
     resetPasswordForEmail.mockResolvedValue({ error: null });
-    rpc.mockResolvedValue({ error: null });
+    rpc.mockImplementation((functionName: string) =>
+      functionName === "get_community_governance_ui"
+        ? Promise.resolve({
+            data: [
+              {
+                community_id: "community-a",
+                governance_state: "managed",
+                is_owner: true,
+                current_membership_role: "member",
+                appointed_admin_count: 0,
+                council_target: null,
+                cycle_id: null,
+                cycle_status: null,
+                candidate_ids: [],
+                current_user_is_candidate: false,
+                round_id: null,
+                round_number: null,
+                round_status: null,
+                seats_available: null,
+                current_user_may_vote: false,
+                current_user_ballot_recorded: false,
+                active_mandates: null,
+                elected_member_ids: [],
+                vacant_seats: null,
+                operational_status: null,
+                current_user_has_mandate: false,
+                may_resign: false,
+              },
+            ],
+            error: null,
+          })
+        : Promise.resolve({ error: null }),
+    );
     communityQuery.order.mockResolvedValue({ data: [], error: null });
     membershipSelect.mockResolvedValue({ data: [], error: null });
   });
@@ -219,7 +251,9 @@ describe("CommunityPage", () => {
     });
     render(<CommunityPage />);
 
-    expect(await screen.findByText("Community owner:")).toBeInTheDocument();
+    expect(
+      await screen.findByText("You — community owner"),
+    ).toBeInTheDocument();
     const appoint = screen.getByRole("button", {
       name: "Appoint administrator member-a",
     });

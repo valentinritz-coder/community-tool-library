@@ -10,15 +10,25 @@ import {
   type Community,
   type Membership,
 } from "../domain/community";
+import {
+  parseGovernanceSnapshot,
+  type GovernanceSnapshot,
+} from "../domain/governance";
 import { getSupabaseBrowserClient } from "../infrastructure/supabase-browser";
 import { ItemSection } from "./item-section";
+import { GovernanceSection } from "./governance-section";
 
 interface CommunityState {
   communities: Community[];
   memberships: Membership[];
+  governance: GovernanceSnapshot[];
 }
 
-const emptyState: CommunityState = { communities: [], memberships: [] };
+const emptyState: CommunityState = {
+  communities: [],
+  memberships: [],
+  governance: [],
+};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error
@@ -63,15 +73,31 @@ export function CommunityPage() {
     const [communities, memberships] = await Promise.all([
       supabase
         .from("communities")
-        .select("id,name,join_code,owner_id,governance_state")
+        .select(
+          "id,name,join_code,owner_id,governance_state,council_target_size,active_election_cycle_id",
+        )
         .order("name"),
       supabase.from("memberships").select("community_id,user_id,role,status"),
     ]);
     if (communities.error) throw communities.error;
     if (memberships.error) throw memberships.error;
+    const communityRows = communities.data as Community[];
+    const governance = await Promise.all(
+      communityRows.map(async (community) => {
+        const result = await supabase.rpc("get_community_governance_ui", {
+          target_community_id: community.id,
+        });
+        if (result.error) throw result.error;
+        const row: unknown = Array.isArray(result.data)
+          ? result.data[0]
+          : result.data;
+        return parseGovernanceSnapshot(row);
+      }),
+    );
     setState({
-      communities: communities.data as Community[],
+      communities: communityRows,
       memberships: memberships.data as Membership[],
+      governance,
     });
   }
 
@@ -174,7 +200,7 @@ export function CommunityPage() {
   async function runRpc(
     action: string,
     functionName: string,
-    parameters: Record<string, string | boolean>,
+    parameters: Record<string, string | boolean | number | string[]>,
     success: string,
   ) {
     announce("");
@@ -391,10 +417,7 @@ export function CommunityPage() {
                       <span>
                         Join code: <code>{community.join_code}</code>
                       </span>
-                      <span>Governance: {community.governance_state}</span>
-                      <span>
-                        Community owner: <code>{community.owner_id}</code>
-                      </span>
+                      <span>Governance details are available below.</span>
                     </li>
                   ))}
                 </ul>
@@ -477,6 +500,14 @@ export function CommunityPage() {
                 </ul>
               )}
             </section>
+            <GovernanceSection
+              communities={state.communities}
+              memberships={state.memberships}
+              snapshots={state.governance}
+              currentUserId={currentUserId}
+              pendingActions={pendingActions}
+              runAction={runRpc}
+            />
             <ItemSection
               communities={state.communities}
               currentUserId={currentUserId}
