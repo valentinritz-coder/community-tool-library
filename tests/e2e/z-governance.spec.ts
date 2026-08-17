@@ -60,7 +60,7 @@ async function asActor<T>(
 async function signIn(browser: Browser, email: string) {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.goto("/");
+  await page.goto("/app");
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();

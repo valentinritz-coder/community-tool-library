@@ -27,31 +27,43 @@ const joiningSteps = [
 
 export function LandingPage() {
   return (
-    <div className="landing">
+    <div className="landing" lang="fr">
       <a className="landing-skip-link" href="#contenu">
         Aller au contenu principal
       </a>
       <header className="landing-header">
         <div className="landing-header__inner">
           <span className="landing-wordmark">Communément</span>
-          <span className="landing-header__pending" aria-label="Connexion bientôt disponible depuis cette page">
+          <span
+            className="landing-header__pending"
+            aria-label="Connexion bientôt disponible depuis cette page"
+          >
             Se connecter
           </span>
         </div>
       </header>
 
       <main id="contenu">
-        <section className="landing-section landing-hero" aria-labelledby="landing-title">
+        <section
+          className="landing-section landing-hero"
+          aria-labelledby="landing-title"
+        >
           <div className="landing-hero__copy">
             <h1 id="landing-title">
-              Des <span>objets</span> en commun.<br />
+              Des <span>objets</span> en commun.
+              <br />
               Des <span>décisions</span> en commun.
             </h1>
             <p className="landing-lead">
-              Partagez et empruntez des objets au sein de votre communauté locale.
-              Simple, humain et fait pour durer.
+              Partagez et empruntez des objets au sein de votre communauté
+              locale. Simple, humain et fait pour durer.
             </p>
-            <button className="landing-button-primary" type="button" disabled aria-describedby="invitation-cue">
+            <button
+              className="landing-button-primary"
+              type="button"
+              disabled
+              aria-describedby="invitation-cue"
+            >
               Rejoindre une communauté
             </button>
             <p id="invitation-cue" className="landing-invitation-cue">
@@ -59,49 +71,107 @@ export function LandingPage() {
             </p>
           </div>
           <div className="landing-hero__visual" aria-hidden="true">
-            <Image src="/illustrations/landing/hero-exchange.svg" alt="" width={760} height={560} priority sizes="(min-width: 60rem) 50vw, 100vw" />
+            <Image
+              src="/illustrations/landing/hero-exchange.svg"
+              alt=""
+              width={800}
+              height={520}
+              priority
+              sizes="(min-width: 60rem) 50vw, 100vw"
+            />
           </div>
         </section>
 
-        <section className="landing-section landing-objects" aria-labelledby="objects-title">
+        <section
+          className="landing-section landing-objects"
+          aria-labelledby="objects-title"
+        >
           <div className="landing-centered-copy">
-            <h2 id="objects-title">Prêt, <span>près</span>, prêtez !</h2>
-            <p className="landing-subheading">Ce dont vous avez besoin est peut-être déjà tout près.</p>
-            <p>Pour bricoler, recevoir, vous équiper ou simplement pour une occasion, découvrez ce que votre communauté met en commun.</p>
+            <h2 id="objects-title">
+              Prêt, <span>près</span>, prêtez !
+            </h2>
+            <p className="landing-subheading">
+              Ce dont vous avez besoin est peut-être déjà tout près.
+            </p>
+            <p>
+              Pour bricoler, recevoir, vous équiper ou simplement pour une
+              occasion, découvrez ce que votre communauté met en commun.
+            </p>
           </div>
           <div className="landing-object-composition" aria-hidden="true">
             {objects.map(([name, className]) => (
-              <Image key={name} className={className} src={`/illustrations/landing/objects/${name}`} alt="" width={240} height={180} sizes="(min-width: 60rem) 14vw, 31vw" />
+              <Image
+                key={name}
+                className={className}
+                src={`/illustrations/landing/objects/${name}`}
+                alt=""
+                width={240}
+                height={180}
+                sizes="(min-width: 60rem) 14vw, 31vw"
+              />
             ))}
           </div>
         </section>
 
-        <section className="landing-section landing-split landing-trust" aria-labelledby="trust-title">
+        <section
+          className="landing-section landing-split landing-trust"
+          aria-labelledby="trust-title"
+        >
           <div className="landing-split__copy">
             <h2 id="trust-title">Partager en confiance</h2>
-            <p className="landing-lead">Une communauté, ce n’est pas n’importe qui.</p>
-            <p>L’accès se fait sur invitation et chaque demande d’adhésion doit être acceptée avant de donner accès à la communauté.</p>
+            <p className="landing-lead">
+              Une communauté, ce n’est pas n’importe qui.
+            </p>
+            <p>
+              L’accès se fait sur invitation et chaque demande d’adhésion doit
+              être acceptée avant de donner accès à la communauté.
+            </p>
           </div>
           <div className="landing-split__visual" aria-hidden="true">
-            <Image src="/illustrations/landing/handshake.svg" alt="" width={720} height={380} sizes="(min-width: 60rem) 48vw, 100vw" />
+            <Image
+              src="/illustrations/landing/handshake.svg"
+              alt=""
+              width={720}
+              height={380}
+              sizes="(min-width: 60rem) 48vw, 100vw"
+            />
           </div>
         </section>
 
-        <section className="landing-section landing-split landing-vote" aria-labelledby="vote-title">
+        <section
+          className="landing-section landing-split landing-vote"
+          aria-labelledby="vote-title"
+        >
           <div className="landing-split__copy">
             <h2 id="vote-title">À voter !</h2>
-            <p className="landing-lead">Votre communauté peut choisir celles et ceux qui la représentent.</p>
-            <p>Les membres élisent leur conseil, qui prend ensuite en charge les décisions et l’administration de la communauté.</p>
+            <p className="landing-lead">
+              Votre communauté peut choisir celles et ceux qui la représentent.
+            </p>
+            <p>
+              Les membres élisent leur conseil, qui prend ensuite en charge les
+              décisions et l’administration de la communauté.
+            </p>
           </div>
           <div className="landing-split__visual" aria-hidden="true">
-            <Image src="/illustrations/landing/council-ballot.svg" alt="" width={720} height={520} sizes="(min-width: 60rem) 52vw, 100vw" />
+            <Image
+              src="/illustrations/landing/council-ballot.svg"
+              alt=""
+              width={720}
+              height={520}
+              sizes="(min-width: 60rem) 52vw, 100vw"
+            />
           </div>
         </section>
 
-        <section className="landing-section landing-join" aria-labelledby="join-title">
+        <section
+          className="landing-section landing-join"
+          aria-labelledby="join-title"
+        >
           <div className="landing-copy">
             <h2 id="join-title">Comment rejoindre ?</h2>
-            <p className="landing-lead">Suivez ces trois étapes simples pour rejoindre votre communauté.</p>
+            <p className="landing-lead">
+              Suivez ces trois étapes simples pour rejoindre votre communauté.
+            </p>
           </div>
           <ol className="landing-steps">
             {joiningSteps.map((step) => (
@@ -113,19 +183,44 @@ export function LandingPage() {
           </ol>
         </section>
 
-        <section className="landing-section landing-project" aria-labelledby="project-title">
+        <section
+          className="landing-section landing-project"
+          aria-labelledby="project-title"
+        >
           <div className="landing-project__copy">
-            <h2 id="project-title">Et si votre communauté n’existe pas encore ?</h2>
-            <p>Communément est un service pour les collectivités, associations et structures locales. Nous vous accompagnons pour lancer votre communauté clé en main.</p>
-            <button className="landing-button-primary" type="button" disabled aria-describedby="contact-pending">
+            <h2 id="project-title">
+              Et si votre communauté n’existe pas encore ?
+            </h2>
+            <p>
+              Communément est un service pour les collectivités, associations et
+              structures locales. Nous vous accompagnons pour lancer votre
+              communauté clé en main.
+            </p>
+            <button
+              className="landing-button-primary"
+              type="button"
+              disabled
+              aria-describedby="contact-pending"
+            >
               Nous contacter
             </button>
-            <p id="contact-pending" className="landing-small">Le parcours de contact sera bientôt disponible.</p>
+            <p id="contact-pending" className="landing-small">
+              Le parcours de contact sera bientôt disponible.
+            </p>
           </div>
           <dl className="landing-audiences">
-            <div><dt>Pour les mairies</dt><dd>Développer le partage et le lien entre habitants.</dd></div>
-            <div><dt>Pour les associations</dt><dd>Proposer un service utile aux membres.</dd></div>
-            <div><dt>Pour les structures locales</dt><dd>Construire la communauté avec l’opérateur.</dd></div>
+            <div>
+              <dt>Pour les mairies</dt>
+              <dd>Développer le partage et le lien entre habitants.</dd>
+            </div>
+            <div>
+              <dt>Pour les associations</dt>
+              <dd>Proposer un service utile aux membres.</dd>
+            </div>
+            <div>
+              <dt>Pour les structures locales</dt>
+              <dd>Construire la communauté avec l’opérateur.</dd>
+            </div>
           </dl>
         </section>
       </main>
@@ -134,11 +229,18 @@ export function LandingPage() {
         <div className="landing-footer__inner">
           <div>
             <p className="landing-wordmark">Communément</p>
-            <p>Des objets en commun.<br />Des décisions en commun.</p>
+            <p>
+              Des objets en commun.
+              <br />
+              Des décisions en commun.
+            </p>
           </div>
-          <nav aria-label="Informations du service">
-            <span>Contact</span><span>Accessibilité</span><span>Confidentialité</span><span>Mentions légales</span>
-          </nav>
+          <div className="landing-footer__labels">
+            <span>Contact</span>
+            <span>Accessibilité</span>
+            <span>Confidentialité</span>
+            <span>Mentions légales</span>
+          </div>
         </div>
       </footer>
     </div>

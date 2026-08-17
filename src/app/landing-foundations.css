@@ -222,7 +222,10 @@
 }
 
 .landing-trust {
-  padding-inline: max(clamp(1rem, 3vw, 2.5rem), calc((100% - var(--landing-content-width)) / 2 + 2rem));
+  padding-inline: max(
+    clamp(1rem, 3vw, 2.5rem),
+    calc((100% - var(--landing-content-width)) / 2 + 2rem)
+  );
 }
 
 .landing-steps {
@@ -301,7 +304,7 @@
   color: #ffffff;
 }
 
-.landing-footer nav {
+.landing-footer__labels {
   display: grid;
   gap: var(--landing-space-2) var(--landing-space-4);
   grid-template-columns: repeat(2, minmax(0, 1fr));
