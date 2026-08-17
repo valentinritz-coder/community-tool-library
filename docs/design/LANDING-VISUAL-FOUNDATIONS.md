@@ -13,8 +13,10 @@ current styles. It provides only the primitives needed by the public page:
 - deep functional blue (`#092a67`) with a darker hover state (`#061f4e`);
 - restrained brand red (`#c83737`), not an error/success/status colour;
 - amber focus (`#f2b705`) with a dark keyline so focus remains a shape, not colour alone;
-- a system sans-serif stack, fluid body/lead/heading sizes, a five-step spacing rhythm, readable
-  line lengths, and section/content widths expressed in relative units.
+- a system sans-serif stack and a deliberately small type hierarchy: `display` for the hero,
+  `section-heading`, `subheading`, `lead`, `body`, and `small`;
+- fluid `clamp()` sizing for display, section heading, subheading, lead, and body roles, plus a
+  five-step spacing rhythm, readable line lengths, and section/content widths in relative units.
 
 The intended text/control pairs exceed WCAG 2.2 AA: ink on surface is 16.4:1, muted ink on surface
 is 7.5:1, blue on surface is 13.7:1, white on blue is 14.6:1, and white on blue-hover is 16.5:1.
@@ -25,10 +27,11 @@ and `.landing-copy`, rather than changing existing global button/link rules.
 ## Illustration assets
 
 All files in `public/illustrations/landing/` are lightweight, responsive SVGs with a `viewBox` and
-no embedded text, scripts, external resources, or interaction. Flat layered shapes, a very subtle
-SVG noise texture, and one shared shadow treatment form the cut-paper language. They can be loaded
-through `next/image` or an ordinary `img`; intrinsic `width`/`height` should be supplied by the
-consumer to prevent layout shift.
+no embedded text, scripts, external resources, or interaction. Every asset applies the same compact
+`paper` filter to its main layered shape group(s): low-opacity procedural fractal noise is multiplied
+into the colour, then a restrained drop shadow separates the cut layers. There are no unused filter
+definitions and no raster texture. The assets can be loaded through `next/image` or an ordinary
+`img`; intrinsic `width`/`height` should be supplied by the consumer to prevent layout shift.
 
 | Asset                | Intended section                                    | Accessibility default                                                                                                                                                     |
 | -------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -49,8 +52,9 @@ asset and reduce reflow flexibility.
   their related HTML while DOM reading order remains text-first.
 - The seven object files are independent so #73 can wrap, reorder visually, or omit purely
   decorative items at narrow widths without cropping a single desktop strip.
-- SVG keeps edges sharp at zoom and avoids desktop/mobile raster variants. Decorative texture is
-  generated in the file rather than shipped as another bitmap request.
+- SVG keeps edges sharp at zoom and avoids desktop/mobile raster variants. The shared procedural
+  grain remains deliberately faint, is applied only to the illustrated layer groups, and adds no
+  bitmap request.
 - Consumers must preserve each `viewBox`, use `height: auto`, and avoid fixed-height sections.
 - Essential headings, descriptions, CTA labels, invitation rules, and governance meaning remain
   HTML. No information depends on blue/red or on an illustration.

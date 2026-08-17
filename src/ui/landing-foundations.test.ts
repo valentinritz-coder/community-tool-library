@@ -41,6 +41,22 @@ function contrast(foreground: string, background: string): number {
 }
 
 describe("landing visual foundations", () => {
+  it("defines distinct fluid roles for hero and section headings", () => {
+    const stylesheet = readFileSync(
+      resolve(root, "src/app/landing-foundations.css"),
+      "utf8",
+    );
+
+    expect(stylesheet).toMatch(/--landing-text-display:\s*clamp\([^;]+\);/);
+    expect(stylesheet).toMatch(
+      /--landing-text-section-heading:\s*clamp\([^;]+\);/,
+    );
+    expect(stylesheet).toContain("font-size: var(--landing-text-display);");
+    expect(stylesheet).toContain(
+      "font-size: var(--landing-text-section-heading);",
+    );
+  });
+
   it("keeps functional colour pairs above WCAG AA contrast", () => {
     const surface = "#fffdf8";
 
@@ -61,6 +77,18 @@ describe("landing visual foundations", () => {
       expect(asset).not.toMatch(/<(?:text|script|foreignObject)\b/i);
       expect(asset).not.toMatch(/(?:href|src)="(?:https?:|data:)/i);
       expect(statSync(path).size).toBeLessThan(10_000);
+
+      const definedIds = [...asset.matchAll(/\bid="([^"]+)"/g)].map(
+        ([, id]) => id,
+      );
+      const referencedIds = [
+        ...asset.matchAll(/(?:url\(#|(?:href|xlink:href)="#)([^")]+)"?\)?/g),
+      ].map(([, id]) => id);
+
+      expect(asset).toMatch(/<filter id="paper"[^>]*>/);
+      expect(asset).toContain("<feTurbulence");
+      expect(asset).toContain("url(#paper)");
+      expect(new Set(referencedIds)).toEqual(new Set(definedIds));
     },
   );
 });
