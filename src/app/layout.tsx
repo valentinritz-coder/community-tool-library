@@ -5,15 +5,16 @@ import "./globals.css";
 import "./landing-foundations.css";
 
 export const metadata: Metadata = {
-  title: "Community Tool Library",
-  description: "Share useful tools with people in your local community.",
+  title: "Communément",
+  description:
+    "Partagez des objets et organisez votre communauté locale ensemble.",
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="fr">
       <body>{children}</body>
     </html>
   );
