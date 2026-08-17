@@ -1,0 +1,101 @@
+/* Foundations for the public landing only. Keep these selectors behind .landing. */
+.landing {
+  --landing-color-surface: #fffdf8;
+  --landing-color-surface-paper: #f6f0e6;
+  --landing-color-ink: #171b26;
+  --landing-color-ink-muted: #4d5361;
+  --landing-color-blue: #092a67;
+  --landing-color-blue-hover: #061f4e;
+  --landing-color-red: #c83737;
+  --landing-color-focus: #f2b705;
+  --landing-color-focus-contrast: #171b26;
+  --landing-font-sans: Arial, Helvetica, sans-serif;
+  --landing-text-sm: 0.875rem;
+  --landing-text-body: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
+  --landing-text-lead: clamp(1.125rem, 1.02rem + 0.5vw, 1.5rem);
+  --landing-text-heading: clamp(2rem, 1.45rem + 2.75vw, 4.75rem);
+  --landing-space-1: 0.5rem;
+  --landing-space-2: 1rem;
+  --landing-space-3: 1.5rem;
+  --landing-space-4: 2rem;
+  --landing-space-5: clamp(3rem, 2rem + 5vw, 7rem);
+  --landing-content-width: 72rem;
+  --landing-reading-width: 42rem;
+  background: var(--landing-color-surface);
+  color: var(--landing-color-ink);
+  font-family: var(--landing-font-sans);
+  font-size: var(--landing-text-body);
+  line-height: 1.6;
+}
+
+.landing :is(h1, h2) {
+  color: var(--landing-color-blue);
+  font-size: var(--landing-text-heading);
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  margin-block: 0 var(--landing-space-3);
+  max-width: 18ch;
+  text-wrap: balance;
+}
+
+.landing-section {
+  margin-inline: auto;
+  max-width: var(--landing-content-width);
+  padding: var(--landing-space-5) clamp(1rem, 3vw, 2.5rem);
+}
+
+.landing-copy {
+  max-width: var(--landing-reading-width);
+}
+
+.landing-button-primary,
+.landing-link-secondary {
+  align-items: center;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 700;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.7rem 1.1rem;
+  text-underline-offset: 0.2em;
+}
+
+.landing-button-primary {
+  background: var(--landing-color-blue);
+  border: 2px solid var(--landing-color-blue);
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.landing-button-primary:hover {
+  background: var(--landing-color-blue-hover);
+  border-color: var(--landing-color-blue-hover);
+}
+
+.landing-link-secondary {
+  color: var(--landing-color-blue);
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.12em;
+}
+
+.landing :is(a, button, input, select, textarea):focus-visible {
+  outline: 0.25rem solid var(--landing-color-focus);
+  outline-offset: 0.2rem;
+  box-shadow: 0 0 0 0.1rem var(--landing-color-focus-contrast);
+}
+
+@media (forced-colors: active) {
+  .landing :is(a, button, input, select, textarea):focus-visible {
+    outline: 0.25rem solid Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing *,
+  .landing *::before,
+  .landing *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
