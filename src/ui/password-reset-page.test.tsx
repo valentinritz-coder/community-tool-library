@@ -120,7 +120,7 @@ describe("PasswordResetPage", () => {
     );
     expect(
       screen.getByRole("link", { name: "Return to sign in" }),
-    ).toHaveAttribute("href", "/");
+    ).toHaveAttribute("href", "/app");
   });
 
   it("reports session cleanup failure without claiming the password update failed", async () => {

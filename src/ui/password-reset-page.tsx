@@ -207,7 +207,7 @@ export function PasswordResetPage() {
                 Try ending session again
               </button>
             ) : (
-              <Link className="button-link" href="/">
+              <Link className="button-link" href="/app">
                 {complete ? "Return to sign in" : "Request a new reset link"}
               </Link>
             )}
