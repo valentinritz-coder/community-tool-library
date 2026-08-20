@@ -72,10 +72,10 @@ export function LandingPage() {
           </div>
           <div className="landing-hero__visual" aria-hidden="true">
             <Image
-              src="/illustrations/landing/hero-exchange.svg"
+              src="/illustrations/landing/hero-exchange.webp"
               alt=""
-              width={800}
-              height={520}
+              width={1556}
+              height={1011}
               priority
               sizes="(min-width: 60rem) 50vw, 100vw"
             />
@@ -129,10 +129,10 @@ export function LandingPage() {
           </div>
           <div className="landing-split__visual" aria-hidden="true">
             <Image
-              src="/illustrations/landing/handshake.svg"
+              src="/illustrations/landing/handshake.webp"
               alt=""
-              width={720}
-              height={380}
+              width={1672}
+              height={941}
               sizes="(min-width: 60rem) 48vw, 100vw"
             />
           </div>
@@ -154,10 +154,10 @@ export function LandingPage() {
           </div>
           <div className="landing-split__visual" aria-hidden="true">
             <Image
-              src="/illustrations/landing/council-ballot.svg"
+              src="/illustrations/landing/council-ballot.webp"
               alt=""
-              width={720}
-              height={520}
+              width={1672}
+              height={941}
               sizes="(min-width: 60rem) 52vw, 100vw"
             />
           </div>

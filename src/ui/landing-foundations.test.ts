@@ -4,10 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = resolve(import.meta.dirname, "../..");
-const illustrationNames = [
-  "hero-exchange.svg",
-  "handshake.svg",
-  "council-ballot.svg",
+const objectIllustrationNames = [
   "objects/raclette.svg",
   "objects/projector.svg",
   "objects/table.svg",
@@ -15,6 +12,12 @@ const illustrationNames = [
   "objects/console.svg",
   "objects/drill.svg",
   "objects/watering-can.svg",
+] as const;
+
+const mainIllustrations = [
+  ["hero-exchange.webp", 1556, 1011],
+  ["handshake.webp", 1672, 941],
+  ["council-ballot.webp", 1672, 941],
 ] as const;
 
 function luminance(hex: string): number {
@@ -67,7 +70,7 @@ describe("landing visual foundations", () => {
     expect(contrast("#ffffff", "#061f4e")).toBeGreaterThanOrEqual(4.5);
   });
 
-  it.each(illustrationNames)(
+  it.each(objectIllustrationNames)(
     "keeps %s responsive, text-free, and small",
     (name) => {
       const path = resolve(root, "public/illustrations/landing", name);
@@ -89,6 +92,26 @@ describe("landing visual foundations", () => {
       expect(asset).toContain("<feTurbulence");
       expect(asset).toContain("url(#paper)");
       expect(new Set(referencedIds)).toEqual(new Set(definedIds));
+    },
+  );
+
+  it.each(mainIllustrations)(
+    "keeps %s as a reasonably sized WebP with stable intrinsic dimensions",
+    (name, expectedWidth, expectedHeight) => {
+      const path = resolve(root, "public/illustrations/landing", name);
+      const asset = readFileSync(path);
+
+      expect(name).toMatch(/\.webp$/);
+      expect(asset.length).toBeGreaterThan(0);
+      expect(asset.subarray(0, 4).toString("ascii")).toBe("RIFF");
+      expect(asset.subarray(8, 12).toString("ascii")).toBe("WEBP");
+      expect(statSync(path).size).toBeLessThan(2_000_000);
+
+      // These assets use WebP's lossless VP8L bitstream.
+      expect(asset.subarray(12, 16).toString("ascii")).toBe("VP8L");
+      const dimensions = asset.readUInt32LE(21);
+      expect((dimensions & 0x3fff) + 1).toBe(expectedWidth);
+      expect(((dimensions >>> 14) & 0x3fff) + 1).toBe(expectedHeight);
     },
   );
 });

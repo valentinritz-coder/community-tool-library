@@ -26,19 +26,17 @@ and `.landing-copy`, rather than changing existing global button/link rules.
 
 ## Illustration assets
 
-All files in `public/illustrations/landing/` are lightweight, responsive SVGs with a `viewBox` and
-no embedded text, scripts, external resources, or interaction. Every asset applies the same compact
-`paper` filter to its main layered shape group(s): low-opacity procedural fractal noise is multiplied
-into the colour, then a restrained drop shadow separates the cut layers. There are no unused filter
-definitions and no raster texture. The assets can be loaded through `next/image` or an ordinary
-`img`; intrinsic `width`/`height` should be supplied by the consumer to prevent layout shift.
+The production asset strategy deliberately combines three raster WebP scenes with seven lightweight
+SVG objects. The WebP scenes preserve the validated paper texture, shadows, and detailed rendering;
+SVG remains appropriate for the smaller, simpler objects. Consumers must supply each asset's
+intrinsic `width` and `height` to preserve its real ratio and prevent layout shift.
 
-| Asset                | Intended section                                    | Accessibility default                                                                                                                                                     |
-| -------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hero-exchange.svg`  | Hero: two hands exchange a drill in a local setting | Meaningful only if adjacent HTML does not already explain sharing; otherwise decorative                                                                                   |
-| `handshake.svg`      | Invitation/community trust                          | Decorative when the adjacent heading and copy explain the idea                                                                                                            |
-| `council-ballot.svg` | Council election                                    | Meaningful only if the adjacent HTML does not mention members electing a council; otherwise decorative                                                                    |
-| `objects/*.svg`      | Breadth of useful shared objects                    | The group may be decorative when adjacent HTML states that varied objects are shared; otherwise give the group one concise description, not seven repetitive alternatives |
+| Asset                 | Intended section                                    | Accessibility default                                                                                                                                                     |
+| --------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hero-exchange.webp`  | Hero: two hands exchange a drill in a local setting | Meaningful only if adjacent HTML does not already explain sharing; otherwise decorative                                                                                   |
+| `handshake.webp`      | Invitation/community trust                          | Decorative when the adjacent heading and copy explain the idea                                                                                                            |
+| `council-ballot.webp` | Council election                                    | Meaningful only if the adjacent HTML does not mention members electing a council; otherwise decorative                                                                    |
+| `objects/*.svg`       | Breadth of useful shared objects                    | The group may be decorative when adjacent HTML states that varied objects are shared; otherwise give the group one concise description, not seven repetitive alternatives |
 
 For decorative use, render an empty alternative (`alt=""`). For meaningful use, describe the
 idea in context (for example, “Deux personnes se transmettent une perceuse”), not colours, texture,
@@ -48,19 +46,18 @@ asset and reduce reflow flexibility.
 
 ## Responsive and performance strategy
 
-- Hero, handshake, and ballot scenes are independent compositions and may stack before or after
-  their related HTML while DOM reading order remains text-first.
+- Hero, handshake, and ballot are visually validated WebP compositions. They may stack before or
+  after their related HTML while DOM reading order remains text-first.
 - The seven object files are independent so #73 can wrap, reorder visually, or omit purely
   decorative items at narrow widths without cropping a single desktop strip.
-- SVG keeps edges sharp at zoom and avoids desktop/mobile raster variants. The shared procedural
-  grain remains deliberately faint, is applied only to the illustrated layer groups, and adds no
-  bitmap request.
-- Consumers must preserve each `viewBox`, use `height: auto`, and avoid fixed-height sections.
-- Essential headings, descriptions, CTA labels, invitation rules, and governance meaning remain
-  HTML. No information depends on blue/red or on an illustration.
+- The object SVGs keep edges sharp at zoom and use a compact procedural paper filter without
+  external resources or embedded text.
+- Images remain responsive with `max-width: 100%` and `height: auto`; consumers must preserve SVG
+  `viewBox` values and avoid fixed-height sections or unintended cropping.
+- Illustrations remain decorative when adjacent HTML already carries their meaning.
+- Essential headings, descriptions, CTA labels, invitation rules, and governance information must
+  remain in HTML and must never be conveyed only by an image. No information depends on colour.
 
-These vectors are the maintainable in-repository interpretation of the approved paper-cut
-direction, not copies of the raster mockups. If future art direction requires the mockups' highly
-realistic fibrous paper, the recommended production path is an illustrator-authored vector master
-with an optimized WebP/AVIF texture fallback, reviewed for visual consistency and payload before
-replacement. Issue #72 does not add a large raster texture or a new image dependency.
+This WebP + SVG combination is a deliberate production decision: detailed scenes retain their
+paper-cut finish, while simple object artwork stays compact and scalable without adding an image
+processing dependency.
