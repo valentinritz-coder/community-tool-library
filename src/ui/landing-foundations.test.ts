@@ -17,8 +17,12 @@ const objectIllustrationNames = [
 const mainIllustrations = [
   ["hero-exchange.webp", 1556, 1011],
   ["handshake.webp", 1672, 941],
-  ["council-ballot.webp", 1672, 941],
+  ["council-ballot.webp", 1536, 1024],
 ] as const;
+
+function readUInt24LE(asset: Buffer, offset: number): number {
+  return asset[offset] | (asset[offset + 1] << 8) | (asset[offset + 2] << 16);
+}
 
 function luminance(hex: string): number {
   const channels = hex
@@ -107,11 +111,13 @@ describe("landing visual foundations", () => {
       expect(asset.subarray(8, 12).toString("ascii")).toBe("WEBP");
       expect(statSync(path).size).toBeLessThan(2_000_000);
 
-      // These assets use WebP's lossless VP8L bitstream.
-      expect(asset.subarray(12, 16).toString("ascii")).toBe("VP8L");
-      const dimensions = asset.readUInt32LE(21);
-      expect((dimensions & 0x3fff) + 1).toBe(expectedWidth);
-      expect(((dimensions >>> 14) & 0x3fff) + 1).toBe(expectedHeight);
+      expect(asset.subarray(12, 16).toString("ascii")).toBe("VP8X");
+
+      const featureFlags = asset[20];
+      expect(featureFlags & 0x10).not.toBe(0);
+
+      expect(readUInt24LE(asset, 24) + 1).toBe(expectedWidth);
+      expect(readUInt24LE(asset, 27) + 1).toBe(expectedHeight);
     },
   );
 });
