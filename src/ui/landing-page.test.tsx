@@ -72,8 +72,8 @@ describe("LandingPage", () => {
         (illustration) => illustration.getAttribute("alt") === "",
       ),
     ).toBe(true);
-    expect(illustrations[0]).toHaveAttribute("width", "800");
-    expect(illustrations[0]).toHaveAttribute("height", "520");
+    expect(illustrations[0]).toHaveAttribute("width", "1556");
+    expect(illustrations[0]).toHaveAttribute("height", "1011");
   });
 
   it("keeps unresolved footer destinations as non-interactive labels", () => {
