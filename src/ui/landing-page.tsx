@@ -156,8 +156,8 @@ export function LandingPage() {
             <Image
               src="/illustrations/landing/council-ballot.webp"
               alt=""
-              width={1672}
-              height={941}
+              width={1536}
+              height={1024}
               sizes="(min-width: 60rem) 52vw, 100vw"
             />
           </div>
