@@ -74,6 +74,10 @@ describe("LandingPage", () => {
     ).toBe(true);
     expect(illustrations[0]).toHaveAttribute("width", "1556");
     expect(illustrations[0]).toHaveAttribute("height", "1011");
+    expect(illustrations[8]).toHaveAttribute("width", "1672");
+    expect(illustrations[8]).toHaveAttribute("height", "941");
+    expect(illustrations[9]).toHaveAttribute("width", "1536");
+    expect(illustrations[9]).toHaveAttribute("height", "1024");
   });
 
   it("keeps unresolved footer destinations as non-interactive labels", () => {

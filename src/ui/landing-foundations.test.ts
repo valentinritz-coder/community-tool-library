@@ -64,6 +64,19 @@ describe("landing visual foundations", () => {
     );
   });
 
+  it("gives desktop compositions more room while preserving bounded content", () => {
+    const stylesheet = readFileSync(
+      resolve(root, "src/app/landing-foundations.css"),
+      "utf8",
+    );
+
+    expect(stylesheet).toContain("--landing-content-width: 90rem;");
+    expect(stylesheet).toMatch(
+      /\.landing-hero\s*{\s*grid-template-columns:\s*minmax\(0, 0\.8fr\) minmax\(0, 1\.2fr\);\s*}/,
+    );
+    expect(stylesheet).toContain("max-width: var(--landing-content-width);");
+  });
+
   it("keeps functional colour pairs above WCAG AA contrast", () => {
     const surface = "#fffdf8";
 

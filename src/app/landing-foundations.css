@@ -21,7 +21,7 @@
   --landing-space-3: 1.5rem;
   --landing-space-4: 2rem;
   --landing-space-5: clamp(3rem, 2rem + 5vw, 7rem);
-  --landing-content-width: 72rem;
+  --landing-content-width: 90rem;
   --landing-reading-width: 42rem;
   background: var(--landing-color-surface);
   color: var(--landing-color-ink);
@@ -385,6 +385,10 @@
   .landing-split,
   .landing-project {
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .landing-hero {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
   }
 
   .landing-hero__visual {
