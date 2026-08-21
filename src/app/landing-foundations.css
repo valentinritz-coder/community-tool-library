@@ -16,7 +16,7 @@
   --landing-text-lead: clamp(1.125rem, 1.02rem + 0.5vw, 1.5rem);
   --landing-text-subheading: clamp(1.25rem, 1.12rem + 0.65vw, 1.75rem);
   --landing-text-section-heading: clamp(2rem, 1.65rem + 1.75vw, 3.5rem);
-  --landing-text-display: clamp(2.75rem, 1.95rem + 4vw, 5.5rem);
+  --landing-text-display: clamp(2.75rem, 1.95rem + 4vw, 5rem);
   --landing-space-1: 0.5rem;
   --landing-space-2: 1rem;
   --landing-space-3: 1.5rem;
@@ -205,26 +205,26 @@
 }
 
 .landing-object-composition {
-  align-items: end;
+  align-items: center;
   display: grid;
-  gap: clamp(0.25rem, 1vw, 1rem);
+  gap: clamp(0.75rem, 1.5vw, 1.75rem);
   grid-template-columns: repeat(4, 1fr);
   margin-top: clamp(2.5rem, 2rem + 3vw, 5rem);
 }
 
 .landing-object-composition img {
+  justify-self: center;
+  max-width: 15rem;
   width: 100%;
-}
-
-.landing-object--projector,
-.landing-object--console,
-.landing-object--watering-can {
-  transform: translateY(0.75rem);
 }
 
 .landing-objects,
 .landing-vote {
   background: var(--landing-color-surface-blue);
+}
+
+.landing-objects {
+  padding-block: clamp(4rem, 3rem + 4vw, 7rem);
 }
 
 .landing-trust,
@@ -376,7 +376,20 @@
 
 @media (min-width: 42rem) {
   .landing-object-composition {
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: clamp(18rem, 28vw, 24rem);
+  }
+
+  .landing-object-composition img:nth-child(odd) {
+    transform: translateY(-1.75rem);
+  }
+
+  .landing-object-composition img:nth-child(even) {
+    transform: translateY(1.75rem);
+  }
+
+  .landing-object-composition img:last-child {
+    grid-column: 3 / 5;
   }
 
   .landing-steps {

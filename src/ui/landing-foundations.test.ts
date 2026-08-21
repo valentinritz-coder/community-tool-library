@@ -54,7 +54,9 @@ describe("landing visual foundations", () => {
       "utf8",
     );
 
-    expect(stylesheet).toMatch(/--landing-text-display:\s*clamp\([^;]+\);/);
+    expect(stylesheet).toContain(
+      "--landing-text-display: clamp(2.75rem, 1.95rem + 4vw, 5rem);",
+    );
     expect(stylesheet).toMatch(
       /--landing-text-section-heading:\s*clamp\([^;]+\);/,
     );
