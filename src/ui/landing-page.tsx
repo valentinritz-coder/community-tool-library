@@ -43,7 +43,7 @@ export function LandingPage() {
         </div>
       </header>
 
-      <main id="contenu">
+      <main id="contenu" className="landing-modules">
         <section
           className="landing-section landing-hero"
           aria-labelledby="landing-title"

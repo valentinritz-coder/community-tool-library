@@ -77,6 +77,23 @@ describe("landing visual foundations", () => {
     expect(stylesheet).toContain("max-width: var(--landing-content-width);");
   });
 
+  it("keeps the major landing modules in one column with thin white joints", () => {
+    const stylesheet = readFileSync(
+      resolve(root, "src/app/landing-foundations.css"),
+      "utf8",
+    );
+
+    expect(stylesheet).toMatch(
+      /\.landing-modules\s*{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0\.75rem;/,
+    );
+    expect(stylesheet).not.toMatch(
+      /\.landing-modules\s*{[^}]*grid-template-columns:/,
+    );
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 41\.999rem\)[\s\S]*?\.landing-modules\s*{[^}]*gap:\s*0\.5rem;/,
+    );
+  });
+
   it("keeps functional colour pairs above WCAG AA contrast", () => {
     const surface = "#fffdf8";
 
