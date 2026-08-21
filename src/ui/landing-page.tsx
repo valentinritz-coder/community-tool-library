@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 const objects = [
   ["raclette.svg", "landing-object--raclette"],
@@ -34,12 +35,9 @@ export function LandingPage() {
       <header className="landing-header">
         <div className="landing-header__inner">
           <span className="landing-wordmark">Communément</span>
-          <span
-            className="landing-header__pending"
-            aria-label="Connexion bientôt disponible depuis cette page"
-          >
+          <Link className="landing-link-secondary" href="/app">
             Se connecter
-          </span>
+          </Link>
         </div>
       </header>
 
@@ -58,14 +56,13 @@ export function LandingPage() {
               Partagez et empruntez des objets au sein de votre communauté
               locale. Simple, humain et fait pour durer.
             </p>
-            <button
+            <Link
               className="landing-button-primary"
-              type="button"
-              disabled
+              href="/app#join-title"
               aria-describedby="invitation-cue"
             >
               Rejoindre une communauté
-            </button>
+            </Link>
             <p id="invitation-cue" className="landing-invitation-cue">
               <span aria-hidden="true">●</span> Accès sur invitation seulement
             </p>
