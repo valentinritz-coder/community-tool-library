@@ -61,3 +61,22 @@ asset and reduce reflow flexibility.
 This WebP + SVG combination is a deliberate production decision: detailed scenes retain their
 paper-cut finish, while simple object artwork stays compact and scalable without adding an image
 processing dependency.
+
+## Modular editorial composition
+
+The public landing follows a general modular editorial approach: one strong product idea occupies
+one autonomous, nearly full-width surface. The hero, the “Prêt, près, prêtez !” second hero, trust,
+council election, joining steps, and project-holder invitation are always stacked in a single
+vertical sequence. Modules are never paired or arranged as a two-column tile grid, although a
+module may use its own text-and-image split or an internal three-step layout where space permits.
+
+The page background is white and appears as a thin joint between surfaces: `0.75rem` on desktop and
+`0.5rem` on narrow screens. Module interiors use the existing warm paper and off-white surfaces,
+plus a restrained pale-blue surface (`#eef3f8`) derived from the functional blue palette. Content
+keeps the established `90rem` bound while module backgrounds extend generously across the viewport.
+The second hero gives the seven existing objects more scale and breathing room rather than treating
+them as a compact decorative strip.
+
+Header and footer intentionally remain simple bookends. This composition preserves Communément’s
+blue, red, cream, paper illustration style and modest typography; it is an original application of
+a common editorial pattern, not a reproduction of any third-party page or component system.

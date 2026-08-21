@@ -27,6 +27,19 @@ describe("LandingPage", () => {
     expect(container.firstElementChild).toHaveAttribute("lang", "fr");
   });
 
+  it("stacks every major idea as a direct module in one narrative column", () => {
+    const { container } = render(<LandingPage />);
+    const modules = container.querySelector(".landing-modules");
+
+    expect(modules).toBeInTheDocument();
+    expect(modules?.children).toHaveLength(6);
+    expect(
+      [...(modules?.children ?? [])].every((module) =>
+        module.classList.contains("landing-section"),
+      ),
+    ).toBe(true);
+  });
+
   it("explains invitation approval and council elections without unsupported claims", () => {
     const { container } = render(<LandingPage />);
 

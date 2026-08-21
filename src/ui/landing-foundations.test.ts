@@ -54,7 +54,9 @@ describe("landing visual foundations", () => {
       "utf8",
     );
 
-    expect(stylesheet).toMatch(/--landing-text-display:\s*clamp\([^;]+\);/);
+    expect(stylesheet).toContain(
+      "--landing-text-display: clamp(2.75rem, 1.95rem + 4vw, 5rem);",
+    );
     expect(stylesheet).toMatch(
       /--landing-text-section-heading:\s*clamp\([^;]+\);/,
     );
@@ -75,6 +77,23 @@ describe("landing visual foundations", () => {
       /\.landing-hero\s*{\s*grid-template-columns:\s*minmax\(0, 0\.8fr\) minmax\(0, 1\.2fr\);\s*}/,
     );
     expect(stylesheet).toContain("max-width: var(--landing-content-width);");
+  });
+
+  it("keeps the major landing modules in one column with thin white joints", () => {
+    const stylesheet = readFileSync(
+      resolve(root, "src/app/landing-foundations.css"),
+      "utf8",
+    );
+
+    expect(stylesheet).toMatch(
+      /\.landing-modules\s*{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0\.75rem;/,
+    );
+    expect(stylesheet).not.toMatch(
+      /\.landing-modules\s*{[^}]*grid-template-columns:/,
+    );
+    expect(stylesheet).toMatch(
+      /@media \(max-width: 41\.999rem\)[\s\S]*?\.landing-modules\s*{[^}]*gap:\s*0\.5rem;/,
+    );
   });
 
   it("keeps functional colour pairs above WCAG AA contrast", () => {

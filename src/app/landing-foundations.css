@@ -2,6 +2,7 @@
 .landing {
   --landing-color-surface: #fffdf8;
   --landing-color-surface-paper: #f6f0e6;
+  --landing-color-surface-blue: #eef3f8;
   --landing-color-ink: #171b26;
   --landing-color-ink-muted: #4d5361;
   --landing-color-blue: #092a67;
@@ -15,7 +16,7 @@
   --landing-text-lead: clamp(1.125rem, 1.02rem + 0.5vw, 1.5rem);
   --landing-text-subheading: clamp(1.25rem, 1.12rem + 0.65vw, 1.75rem);
   --landing-text-section-heading: clamp(2rem, 1.65rem + 1.75vw, 3.5rem);
-  --landing-text-display: clamp(2.75rem, 1.95rem + 4vw, 5.5rem);
+  --landing-text-display: clamp(2.75rem, 1.95rem + 4vw, 5rem);
   --landing-space-1: 0.5rem;
   --landing-space-2: 1rem;
   --landing-space-3: 1.5rem;
@@ -80,9 +81,21 @@
 }
 
 .landing-section {
+  background: var(--landing-color-surface-paper);
   margin-inline: auto;
-  max-width: var(--landing-content-width);
-  padding: var(--landing-space-5) clamp(1rem, 3vw, 2.5rem);
+  padding: clamp(3rem, 2rem + 4vw, 6rem)
+    max(
+      clamp(1rem, 3vw, 2.5rem),
+      calc((100% - var(--landing-content-width)) / 2 + 2.5rem)
+    );
+  width: 100%;
+}
+
+.landing-modules {
+  background: #ffffff;
+  display: grid;
+  gap: 0.75rem;
+  padding-inline: clamp(0.5rem, 1.25vw, 1.5rem);
 }
 
 .landing-skip-link {
@@ -139,7 +152,7 @@
 }
 
 .landing-hero {
-  padding-top: clamp(2rem, 1rem + 4vw, 5rem);
+  padding-block: clamp(2rem, 1rem + 3vw, 4rem);
 }
 
 .landing-hero h1 span,
@@ -192,40 +205,35 @@
 }
 
 .landing-object-composition {
-  align-items: end;
+  align-items: center;
   display: grid;
-  gap: clamp(0.25rem, 1vw, 1rem);
+  gap: clamp(0.75rem, 1.5vw, 1.75rem);
   grid-template-columns: repeat(4, 1fr);
-  margin-top: var(--landing-space-4);
+  margin-top: clamp(2.5rem, 2rem + 3vw, 5rem);
 }
 
 .landing-object-composition img {
+  justify-self: center;
+  max-width: 15rem;
   width: 100%;
 }
 
-.landing-object--projector,
-.landing-object--console,
-.landing-object--watering-can {
-  transform: translateY(0.75rem);
+.landing-objects,
+.landing-vote {
+  background: var(--landing-color-surface-blue);
+}
+
+.landing-objects {
+  padding-block: clamp(4rem, 3rem + 4vw, 7rem);
 }
 
 .landing-trust,
+.landing-project {
+  background: var(--landing-color-surface);
+}
+
 .landing-join {
   background: var(--landing-color-surface-paper);
-  max-width: none;
-}
-
-.landing-trust > *,
-.landing-join > * {
-  margin-inline: auto;
-  width: min(100%, var(--landing-content-width));
-}
-
-.landing-trust {
-  padding-inline: max(
-    clamp(1rem, 3vw, 2.5rem),
-    calc((100% - var(--landing-content-width)) / 2 + 2rem)
-  );
 }
 
 .landing-steps {
@@ -240,7 +248,7 @@
 .landing-steps li,
 .landing-audiences {
   background: var(--landing-color-surface);
-  box-shadow: 0 0.4rem 1rem rgb(23 27 38 / 9%);
+  border: 1px solid #d9cebc;
 }
 
 .landing-steps li {
@@ -368,11 +376,40 @@
 
 @media (min-width: 42rem) {
   .landing-object-composition {
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: clamp(18rem, 28vw, 24rem);
+  }
+
+  .landing-object-composition img:nth-child(odd) {
+    transform: translateY(-1.75rem);
+  }
+
+  .landing-object-composition img:nth-child(even) {
+    transform: translateY(1.75rem);
+  }
+
+  .landing-object-composition img:last-child {
+    grid-column: 3 / 5;
   }
 
   .landing-steps {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 41.999rem) {
+  .landing-modules {
+    gap: 0.5rem;
+  }
+
+  .landing-object-composition {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-object-composition img:last-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: 50%;
   }
 }
 
