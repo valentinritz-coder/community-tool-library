@@ -58,15 +58,24 @@ describe("LandingPage", () => {
     );
   });
 
-  it("keeps unresolved calls to action explicit and non-interactive", () => {
+  it("connects sign-in and join actions to the existing application journey", () => {
     render(<LandingPage />);
 
+    expect(screen.getByRole("link", { name: "Se connecter" })).toHaveAttribute(
+      "href",
+      "/app",
+    );
     expect(
-      screen.getByRole("button", { name: "Rejoindre une communauté" }),
-    ).toBeDisabled();
+      screen.getByRole("link", { name: "Rejoindre une communauté" }),
+    ).toHaveAttribute("href", "/app#join-title");
     expect(
       screen.getByText("Accès sur invitation seulement"),
     ).toBeInTheDocument();
+  });
+
+  it("keeps the unresolved contact action explicit and non-interactive", () => {
+    render(<LandingPage />);
+
     expect(
       screen.getByRole("button", { name: "Nous contacter" }),
     ).toBeDisabled();

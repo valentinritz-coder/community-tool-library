@@ -39,6 +39,20 @@ function reservation(page: Page, heading: string) {
 }
 
 test.describe.serial("critical MVP journeys", () => {
+  test("public landing actions use the existing authentication and join entry point", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Se connecter" }).click();
+    await expect(page).toHaveURL(/\/app$/);
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+
+    await page.goto("/");
+    await page.getByRole("link", { name: "Rejoindre une communauté" }).click();
+    await expect(page).toHaveURL(/\/app#join-title$/);
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  });
+
   test("real authentication, join, and approval grant community access", async ({
     browser,
   }) => {

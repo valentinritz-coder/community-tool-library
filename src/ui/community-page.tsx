@@ -118,6 +118,12 @@ export function CommunityPage() {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!authenticated || window.location.hash !== "#join-title") return;
+
+    document.getElementById("join-title")?.scrollIntoView({ block: "start" });
+  }, [authenticated]);
+
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     announce("");
