@@ -39,6 +39,7 @@ vi.mock("../infrastructure/supabase-browser", () => ({
 describe("CommunityPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.location.hash = "";
     getSession.mockResolvedValue({ data: { session: null } });
     signInWithPassword.mockResolvedValue({ error: null });
     resetPasswordForEmail.mockResolvedValue({ error: null });
@@ -91,7 +92,7 @@ describe("CommunityPage", () => {
             ],
             error: null,
           })
-        : Promise.resolve({ error: null }),
+        : Promise.resolve({ data: [], error: null }),
     );
     communityQuery.order.mockResolvedValue({ data: [], error: null });
     membershipSelect.mockResolvedValue({ data: [], error: null });
@@ -123,6 +124,59 @@ describe("CommunityPage", () => {
     ).toHaveAttribute("href", "#main");
     expect(screen.getByRole("main")).toHaveAttribute("id", "main");
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("scrolls to the join request once an authenticated session renders it", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.location.hash = "#join-title";
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "member-a" } } },
+    });
+
+    render(<CommunityPage />);
+
+    const joinHeading = await screen.findByRole("heading", {
+      name: "Request to join",
+    });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledOnce());
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(joinHeading).not.toHaveAttribute("tabindex");
+  });
+
+  it("retains the join destination while an unauthenticated user signs in", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.location.hash = "#join-title";
+
+    render(<CommunityPage />);
+    fireEvent.change(screen.getByLabelText("Email address"), {
+      target: { value: "member@example.test" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "synthetic-password" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Request to join" }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledOnce());
+  });
+
+  it("does not scroll the normal application journey without the join hash", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    getSession.mockResolvedValue({
+      data: { session: { user: { id: "member-a" } } },
+    });
+
+    render(<CommunityPage />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Request to join" }),
+    ).toBeInTheDocument();
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("exposes an asynchronous authentication error as an alert", async () => {
